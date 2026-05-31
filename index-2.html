@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="NutriAgent – מערכת תמיכה קלינית חכמה לתזונאים ולמשתמשים פרטיים" />
+  <meta name="theme-color" content="#0a1628" />
+  <title>NutriAgent | מערכת תזונה חכמה</title>
+
+  <!-- ================================================================
+       GOOGLE FONTS — Chosen for clinical authority + Hebrew readability
+       Heebo: Best-in-class RTL Hebrew display & body font
+       DM Serif Display: Elegant Latin/numeral accent headlines
+  ================================================================ -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+  <!-- ================================================================
+       AMBIENT BACKGROUND LAYER
+       Subtle animated mesh gradient providing clinical-modern depth
+  ================================================================ -->
+  <div class="bg-ambient" aria-hidden="true">
+    <div class="bg-orb bg-orb--1"></div>
+    <div class="bg-orb bg-orb--2"></div>
+    <div class="bg-orb bg-orb--3"></div>
+    <div class="bg-noise"></div>
+  </div>
+
+  <!-- ================================================================
+       ROOT APPLICATION WRAPPER
+  ================================================================ -->
+  <div id="app-root" class="app-root">
+
+    <!-- ============================================================
+         TOP NAVIGATION BAR
+    ============================================================ -->
+    <header class="topbar" role="banner">
+      <div class="topbar__inner">
+
+        <!-- Brand -->
+        <div class="topbar__brand">
+          <div class="brand-logo" aria-hidden="true">
+            <span class="brand-logo__icon">
+              <!-- Leaf/DNA icon inline SVG -->
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M14 2C14 2 6 8 6 16C6 20.418 9.582 24 14 24C18.418 24 22 20.418 22 16C22 8 14 2 14 2Z" fill="url(#leafGrad)" />
+                <path d="M14 8V24" stroke="rgba(255,255,255,0.4)" stroke-width="1.5" stroke-linecap="round"/>
+                <path d="M14 12C14 12 10 14 8 18" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" stroke-linecap="round"/>
+                <path d="M14 16C14 16 17 17.5 19 20" stroke="rgba(255,255,255,0.3)" stroke-width="1.2" stroke-linecap="round"/>
+                <defs>
+                  <linearGradient id="leafGrad" x1="14" y1="2" x2="14" y2="24" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stop-color="#4ade80"/>
+                    <stop offset="100%" stop-color="#16a34a"/>
+                  </linearGradient>
+                </defs>
+              </svg>
+            </span>
+            <span class="brand-logo__wordmark">
+              <span class="brand-logo__nutri">Nutri</span><span class="brand-logo__agent">Agent</span>
+            </span>
+          </div>
+          <div class="brand-tagline">מערכת תמיכה תזונתית קלינית</div>
+        </div>
+
+        <!-- Mode toggle: Dietitian / Private User -->
+        <nav class="topbar__mode-toggle" role="tablist" aria-label="בחירת מצב שימוש">
+          <button
+            class="mode-btn mode-btn--active"
+            id="btn-mode-private"
+            role="tab"
+            aria-selected="true"
+            aria-controls="panel-chat"
+            data-mode="private"
+          >
+            <span class="mode-btn__icon">👤</span>
+            <span class="mode-btn__label">משתמש פרטי</span>
+          </button>
+          <button
+            class="mode-btn"
+            id="btn-mode-clinical"
+            role="tab"
+            aria-selected="false"
+            aria-controls="panel-chat"
+            data-mode="clinical"
+          >
+            <span class="mode-btn__icon">🩺</span>
+            <span class="mode-btn__label">תזונאי קליני</span>
+          </button>
+        </nav>
+
+        <!-- Status indicators -->
+        <div class="topbar__status" aria-live="polite" aria-atomic="true">
+          <div class="status-dot status-dot--online" id="api-status-dot" title="חיבור API פעיל"></div>
+          <span class="status-label" id="api-status-label">מחובר</span>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- ============================================================
+         MAIN CONTENT AREA — Three-panel layout
+    ============================================================ -->
+    <main class="main-layout" role="main">
+
+      <!-- ----------------------------------------------------------
+           LEFT SIDEBAR — Patient/User Profile Panel
+      ---------------------------------------------------------- -->
+      <aside class="sidebar sidebar--left" id="sidebar-profile" aria-label="פרופיל משתמש">
+        <div class="sidebar__inner">
+
+          <div class="sidebar__section">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">📋</span>
+              פרופיל נאסף
+            </h2>
+            <!-- Profile data slots — populated by chatbot-ui.js -->
+            <div class="profile-card" id="profile-card">
+              <div class="profile-empty-state" id="profile-empty-state">
+                <div class="profile-empty-state__icon" aria-hidden="true">🌱</div>
+                <p class="profile-empty-state__text">הפרופיל יתמלא<br/>תוך כדי השיחה</p>
+              </div>
+              <!-- Dynamic profile fields rendered here -->
+              <dl class="profile-fields" id="profile-fields" aria-label="שדות פרופיל תזונתי"></dl>
+            </div>
+          </div>
+
+          <!-- BMI / BMR Metrics Block -->
+          <div class="sidebar__section sidebar__section--metrics" id="metrics-block" aria-hidden="true">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">📊</span>
+              מדדים פיזיולוגיים
+            </h2>
+            <div class="metrics-grid">
+              <div class="metric-tile" id="metric-bmi">
+                <div class="metric-tile__label">BMI</div>
+                <div class="metric-tile__value" id="metric-bmi-value">—</div>
+                <div class="metric-tile__badge" id="metric-bmi-badge"></div>
+              </div>
+              <div class="metric-tile" id="metric-calories">
+                <div class="metric-tile__label">יעד קלורי יומי</div>
+                <div class="metric-tile__value" id="metric-calories-value">—</div>
+                <div class="metric-tile__unit">קק"ל</div>
+              </div>
+              <div class="metric-tile" id="metric-bmr">
+                <div class="metric-tile__label">BMR בסיסי</div>
+                <div class="metric-tile__value" id="metric-bmr-value">—</div>
+                <div class="metric-tile__unit">קק"ל/יום</div>
+              </div>
+              <div class="metric-tile" id="metric-bmi-category">
+                <div class="metric-tile__label">קטגוריה</div>
+                <div class="metric-tile__value metric-tile__value--category" id="metric-category-value">—</div>
+              </div>
+            </div>
+            <!-- Pediatric BMI Gauge -->
+            <div class="bmi-gauge-container" id="bmi-gauge-container" aria-hidden="true">
+              <div class="bmi-gauge__track">
+                <div class="bmi-gauge__fill bmi-gauge__fill--underweight"></div>
+                <div class="bmi-gauge__fill bmi-gauge__fill--normal"></div>
+                <div class="bmi-gauge__fill bmi-gauge__fill--overweight"></div>
+                <div class="bmi-gauge__fill bmi-gauge__fill--obese"></div>
+              </div>
+              <div class="bmi-gauge__needle" id="bmi-gauge-needle" aria-hidden="true"></div>
+              <div class="bmi-gauge__labels">
+                <span>תת משקל</span>
+                <span>תקין</span>
+                <span>עודף</span>
+                <span>השמנה</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dietary Tags Cloud -->
+          <div class="sidebar__section" id="dietary-tags-section" aria-hidden="true">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🏷️</span>
+              אילוצים תזונתיים
+            </h2>
+            <div class="tags-cloud" id="dietary-tags-cloud" aria-label="תגי אילוצים תזונתיים"></div>
+          </div>
+
+          <!-- Clinical audit note (visible only in clinical mode) -->
+          <div class="sidebar__section sidebar__section--clinical" id="clinical-audit-section" aria-hidden="true">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🔬</span>
+              יומן קליני
+            </h2>
+            <div class="clinical-log" id="clinical-log">
+              <p class="clinical-log__empty">היומן יתמלא לאחר יצירת תוכנית הארוחות.</p>
+            </div>
+          </div>
+
+        </div>
+      </aside>
+
+      <!-- ----------------------------------------------------------
+           CENTER PANEL — Chat Interface
+      ---------------------------------------------------------- -->
+      <section
+        class="chat-panel"
+        id="panel-chat"
+        role="tabpanel"
+        aria-labelledby="btn-mode-private"
+      >
+
+        <!-- Chat messages scroll area -->
+        <div
+          class="chat-messages"
+          id="chat-messages"
+          role="log"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-label="הודעות שיחה"
+        >
+          <!-- Dynamic message bubbles rendered here by chatbot-ui.js -->
+
+          <!-- Initial loader shown until FSM boots -->
+          <div class="chat-boot-loader" id="chat-boot-loader" aria-live="assertive">
+            <div class="boot-spinner" aria-hidden="true">
+              <div class="boot-spinner__ring"></div>
+              <div class="boot-spinner__leaf" aria-hidden="true">🌿</div>
+            </div>
+            <p class="boot-text">מאתחל את NutriAgent…</p>
+          </div>
+
+        </div>
+
+        <!-- --------------------------------------------------------
+             MEAL PLAN DASHBOARD — Hidden until plan is generated
+        -------------------------------------------------------- -->
+        <div
+          class="meal-dashboard"
+          id="meal-dashboard"
+          aria-label="לוח תכנית ארוחות יומית"
+          aria-hidden="true"
+          role="region"
+        >
+          <!-- Dashboard Header -->
+          <div class="meal-dashboard__header">
+            <div class="meal-dashboard__title-group">
+              <h2 class="meal-dashboard__title">תכנית ארוחות יומית</h2>
+              <p class="meal-dashboard__subtitle" id="meal-plan-date"></p>
+            </div>
+            <div class="meal-dashboard__totals" id="meal-dashboard-totals" aria-label="סיכום קלורי">
+              <div class="total-badge">
+                <span class="total-badge__label">סה"כ קלוריות</span>
+                <span class="total-badge__value" id="total-calories-display">—</span>
+              </div>
+            </div>
+            <button
+              class="btn btn--secondary btn--sm"
+              id="btn-print-plan"
+              aria-label="הדפסת תוכנית ארוחות"
+              title="הדפס / שמור PDF"
+            >
+              <span aria-hidden="true">🖨️</span> הדפסה
+            </button>
+          </div>
+
+          <!-- Calorie Calculation Clinical Breakdown -->
+          <div class="calorie-breakdown-strip" id="calorie-breakdown-strip" aria-label="פירוט חישוב קלורי">
+            <p class="calorie-breakdown-strip__text" id="calorie-breakdown-text"></p>
+          </div>
+
+          <!-- Macro Distribution Bar -->
+          <div class="macro-bar-container" id="macro-bar-container" aria-label="התפלגות מאקרו-נוטריאנטים" aria-hidden="true">
+            <div class="macro-bar" id="macro-bar">
+              <div class="macro-bar__segment macro-bar__segment--protein" id="macro-seg-protein" style="width:0%">
+                <span class="macro-bar__label">חלבון</span>
+              </div>
+              <div class="macro-bar__segment macro-bar__segment--carbs" id="macro-seg-carbs" style="width:0%">
+                <span class="macro-bar__label">פחמימות</span>
+              </div>
+              <div class="macro-bar__segment macro-bar__segment--fat" id="macro-seg-fat" style="width:0%">
+                <span class="macro-bar__label">שומן</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6-Meal Grid -->
+          <div class="meals-grid" id="meals-grid" aria-label="רשת ארוחות יומית">
+
+            <!-- BREAKFAST -->
+            <article class="meal-card" id="meal-card-breakfast" data-meal="breakfast" aria-label="ארוחת בוקר">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🌅</span>
+                  <span class="meal-card__time">07:00</span>
+                </div>
+                <h3 class="meal-card__meal-name">ארוחת בוקר</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-breakfast">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-breakfast">—</p>
+                <p class="meal-card__description" id="meal-desc-breakfast"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-breakfast" aria-label="אשכול תזונתי"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="breakfast"
+                  aria-label="החלפת ארוחת בוקר"
+                  title="🔄 שנה ארוחה"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+            <!-- MORNING SNACK -->
+            <article class="meal-card meal-card--snack" id="meal-card-morning_snack" data-meal="morning_snack" aria-label="חטיף בוקר">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🍎</span>
+                  <span class="meal-card__time">10:00</span>
+                </div>
+                <h3 class="meal-card__meal-name">חטיף בוקר</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-morning_snack">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-morning_snack">—</p>
+                <p class="meal-card__description" id="meal-desc-morning_snack"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-morning_snack"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="morning_snack"
+                  aria-label="החלפת חטיף בוקר"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+            <!-- LUNCH -->
+            <article class="meal-card meal-card--main" id="meal-card-lunch" data-meal="lunch" aria-label="ארוחת צהריים">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🍽️</span>
+                  <span class="meal-card__time">13:00</span>
+                </div>
+                <h3 class="meal-card__meal-name">ארוחת צהריים</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-lunch">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-lunch">—</p>
+                <p class="meal-card__description" id="meal-desc-lunch"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-lunch"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="lunch"
+                  aria-label="החלפת ארוחת צהריים"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+            <!-- AFTERNOON SNACK -->
+            <article class="meal-card meal-card--snack" id="meal-card-afternoon_snack" data-meal="afternoon_snack" aria-label="חטיף אחר הצהריים">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🫐</span>
+                  <span class="meal-card__time">16:00</span>
+                </div>
+                <h3 class="meal-card__meal-name">חטיף אחה"צ</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-afternoon_snack">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-afternoon_snack">—</p>
+                <p class="meal-card__description" id="meal-desc-afternoon_snack"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-afternoon_snack"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="afternoon_snack"
+                  aria-label="החלפת חטיף אחר הצהריים"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+            <!-- DINNER -->
+            <article class="meal-card meal-card--main" id="meal-card-dinner" data-meal="dinner" aria-label="ארוחת ערב">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🌙</span>
+                  <span class="meal-card__time">19:00</span>
+                </div>
+                <h3 class="meal-card__meal-name">ארוחת ערב</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-dinner">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-dinner">—</p>
+                <p class="meal-card__description" id="meal-desc-dinner"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-dinner"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="dinner"
+                  aria-label="החלפת ארוחת ערב"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+            <!-- EVENING SNACK -->
+            <article class="meal-card meal-card--snack" id="meal-card-evening_snack" data-meal="evening_snack" aria-label="חטיף לילה">
+              <div class="meal-card__header">
+                <div class="meal-card__time-badge">
+                  <span class="meal-card__emoji" aria-hidden="true">🌛</span>
+                  <span class="meal-card__time">21:30</span>
+                </div>
+                <h3 class="meal-card__meal-name">חטיף לילה</h3>
+                <div class="meal-card__calories">
+                  <span class="meal-card__cal-value" id="cal-evening_snack">—</span>
+                  <span class="meal-card__cal-unit">קק"ל</span>
+                </div>
+              </div>
+              <div class="meal-card__body">
+                <p class="meal-card__item-name" id="meal-name-evening_snack">—</p>
+                <p class="meal-card__description" id="meal-desc-evening_snack"></p>
+              </div>
+              <div class="meal-card__footer">
+                <div class="meal-card__cluster-tag" id="cluster-evening_snack"></div>
+                <button
+                  class="btn btn--swap"
+                  data-meal="evening_snack"
+                  aria-label="החלפת חטיף לילה"
+                >
+                  🔄 שנה ארוחה
+                </button>
+              </div>
+            </article>
+
+          </div><!-- /meals-grid -->
+
+          <!-- AI Summary Banner -->
+          <div class="plan-summary-banner" id="plan-summary-banner" aria-label="סיכום תוכנית תזונה" aria-hidden="true">
+            <div class="plan-summary-banner__icon" aria-hidden="true">✨</div>
+            <p class="plan-summary-banner__text" id="plan-summary-text"></p>
+          </div>
+
+          <!-- DBSCAN Compliance Badge -->
+          <div class="compliance-badge" id="compliance-badge" aria-label="אישור עמידה בסטנדרטים" aria-hidden="true">
+            <span class="compliance-badge__icon" aria-hidden="true">✅</span>
+            <span class="compliance-badge__text">אומת: אפס פריטי DBSCAN-1 | עמידה מלאה באילוצים התזונתיים</span>
+          </div>
+
+        </div><!-- /meal-dashboard -->
+
+        <!-- --------------------------------------------------------
+             CHAT INPUT AREA
+        -------------------------------------------------------- -->
+        <div class="chat-input-area" id="chat-input-area" role="form" aria-label="אזור הקלדת הודעה">
+
+          <!-- Typing indicator (shown while AI is processing) -->
+          <div class="typing-indicator" id="typing-indicator" aria-hidden="true" aria-live="polite">
+            <div class="typing-indicator__avatar" aria-hidden="true">🌿</div>
+            <div class="typing-indicator__dots" aria-label="NutriAgent מקליד...">
+              <span></span><span></span><span></span>
+            </div>
+            <span class="typing-indicator__label">NutriAgent מעבד…</span>
+          </div>
+
+          <!-- Quick-reply suggestion chips -->
+          <div class="quick-chips" id="quick-chips" role="group" aria-label="תגובות מהירות מוצעות" aria-hidden="true">
+            <!-- Populated dynamically by chatbot-ui.js -->
+          </div>
+
+          <!-- Main input row -->
+          <div class="input-row">
+            <div class="input-wrapper">
+              <textarea
+                id="user-input"
+                class="chat-input"
+                rows="1"
+                placeholder="הקלד הודעה בעברית…"
+                aria-label="שדה הקלדת הודעה בעברית"
+                aria-multiline="true"
+                autocomplete="off"
+                autocorrect="off"
+                spellcheck="false"
+                dir="rtl"
+                maxlength="1000"
+              ></textarea>
+              <div class="input-char-counter" id="input-char-counter" aria-hidden="true">
+                <span id="char-count">0</span>/1000
+              </div>
+            </div>
+            <button
+              class="btn btn--send"
+              id="btn-send"
+              aria-label="שלח הודעה"
+              title="שלח (Enter)"
+              disabled
+            >
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <path d="M18 2L9 11M18 2L12 18L9 11M18 2L2 8L9 11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Disclaimer strip -->
+          <p class="input-disclaimer">
+            ⚕️ NutriAgent הוא כלי תמיכה בלבד ואינו מהווה תחליף לייעוץ תזונאי מוסמך.
+          </p>
+
+        </div><!-- /chat-input-area -->
+
+      </section><!-- /chat-panel -->
+
+      <!-- ----------------------------------------------------------
+           RIGHT SIDEBAR — Nutritional Intelligence Panel
+      ---------------------------------------------------------- -->
+      <aside class="sidebar sidebar--right" id="sidebar-intel" aria-label="מידע תזונתי נוסף">
+        <div class="sidebar__inner">
+
+          <!-- K-Means Cluster Legend -->
+          <div class="sidebar__section">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🧬</span>
+              אשכולות מזון (K-Means)
+            </h2>
+            <div class="cluster-legend">
+              <div class="cluster-legend__item cluster-legend__item--0">
+                <div class="cluster-legend__dot"></div>
+                <div class="cluster-legend__info">
+                  <strong>אשכול 0</strong>
+                  <span>נפח / הידרציה / צפיפות נמוכה</span>
+                  <small>עלים ירוקים, פירות טריים, מרקים</small>
+                </div>
+              </div>
+              <div class="cluster-legend__item cluster-legend__item--1">
+                <div class="cluster-legend__dot"></div>
+                <div class="cluster-legend__info">
+                  <strong>אשכול 1</strong>
+                  <span>חלבון רזה</span>
+                  <small>חזה עוף, טונה, פילה קוד, חלבוני ביצה</small>
+                </div>
+              </div>
+              <div class="cluster-legend__item cluster-legend__item--2">
+                <div class="cluster-legend__dot"></div>
+                <div class="cluster-legend__info">
+                  <strong>אשכול 2</strong>
+                  <span>שומנים בריאים / אנרגיה צפופה</span>
+                  <small>שמן זית, אגוזים, טחינה, אבוקדו</small>
+                </div>
+              </div>
+              <div class="cluster-legend__item cluster-legend__item--3">
+                <div class="cluster-legend__dot"></div>
+                <div class="cluster-legend__info">
+                  <strong>אשכול 3</strong>
+                  <span>פחמימות מורכבות</span>
+                  <small>אורז מלא, קינואה, שיבולת שועל, לחם כוסמין</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- DBSCAN Guardrail Status -->
+          <div class="sidebar__section">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🛡️</span>
+              מגן DBSCAN
+            </h2>
+            <div class="dbscan-status-card" id="dbscan-status-card">
+              <div class="dbscan-status-card__header">
+                <span class="dbscan-status-card__badge dbscan-status-card__badge--idle" id="dbscan-badge">
+                  ממתין לסריקה
+                </span>
+              </div>
+              <p class="dbscan-status-card__desc">
+                פריטים המסווגים כ-DBSCAN -1 (חריגים/רעש) חסומים אוטומטית ממשתמשים פרטיים ללא אישור קליני.
+              </p>
+              <div class="dbscan-outlier-count" id="dbscan-outlier-count" aria-hidden="true">
+                <span>חריגים זוהו:</span>
+                <strong id="dbscan-count-val">—</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Swap History Log -->
+          <div class="sidebar__section" id="swap-history-section">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🔄</span>
+              היסטוריית החלפות
+            </h2>
+            <ul class="swap-history-list" id="swap-history-list" aria-label="רשימת החלפות ארוחות" aria-live="polite">
+              <li class="swap-history-list__empty" id="swap-history-empty">
+                עדיין לא בוצעו החלפות.
+              </li>
+            </ul>
+          </div>
+
+          <!-- Progress / FSM Stage indicator -->
+          <div class="sidebar__section">
+            <h2 class="sidebar__title">
+              <span class="sidebar__title-icon" aria-hidden="true">🗺️</span>
+              שלב נוכחי
+            </h2>
+            <ol class="fsm-stage-list" id="fsm-stage-list" aria-label="מצב אסיף הנתונים">
+              <li class="fsm-stage fsm-stage--active" data-stage="greeting">ברכה ראשונית</li>
+              <li class="fsm-stage" data-stage="age">גיל</li>
+              <li class="fsm-stage" data-stage="gender">מין</li>
+              <li class="fsm-stage" data-stage="weight">משקל</li>
+              <li class="fsm-stage" data-stage="height">גובה</li>
+              <li class="fsm-stage" data-stage="activity">רמת פעילות</li>
+              <li class="fsm-stage" data-stage="allergies">אלרגיות</li>
+              <li class="fsm-stage" data-stage="dislikes">דחיות</li>
+              <li class="fsm-stage" data-stage="restrictions">הגבלות</li>
+              <li class="fsm-stage" data-stage="summary">סיכום ועריכה</li>
+              <li class="fsm-stage" data-stage="meal_plan">תוכנית ארוחות</li>
+              <li class="fsm-stage" data-stage="followup">שאלות המשך</li>
+            </ol>
+          </div>
+
+        </div>
+      </aside><!-- /sidebar-right -->
+
+    </main><!-- /main-layout -->
+
+    <!-- ============================================================
+         GLOBAL MODAL — Used for edit field dialogs & confirmations
+    ============================================================ -->
+    <div
+      class="modal-overlay"
+      id="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      aria-hidden="true"
+    >
+      <div class="modal" id="modal">
+        <button class="modal__close" id="modal-close" aria-label="סגור חלון">✕</button>
+        <h2 class="modal__title" id="modal-title">עריכת שדה</h2>
+        <div class="modal__body" id="modal-body">
+          <!-- Dynamic content injected by chatbot-ui.js -->
+        </div>
+        <div class="modal__footer">
+          <button class="btn btn--primary" id="modal-confirm">אישור</button>
+          <button class="btn btn--ghost" id="modal-cancel">ביטול</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TOAST NOTIFICATION CONTAINER
+    ============================================================ -->
+    <div
+      class="toast-container"
+      id="toast-container"
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+      aria-label="התראות מערכת"
+    ></div>
+
+    <!-- ============================================================
+         API KEY SETUP OVERLAY — Shown on first launch if no key found
+    ============================================================ -->
+    <div
+      class="api-key-overlay"
+      id="api-key-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="api-key-overlay-title"
+      aria-hidden="true"
+    >
+      <div class="api-key-card">
+        <div class="api-key-card__logo" aria-hidden="true">🌿</div>
+        <h1 class="api-key-card__title" id="api-key-overlay-title">ברוכים הבאים ל-NutriAgent</h1>
+        <p class="api-key-card__desc">
+          כדי להפעיל את המערכת, יש להזין מפתח API תקין של OpenAI.<br/>
+          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי OpenAI.
+        </p>
+        <div class="api-key-card__input-group">
+          <label for="api-key-input" class="api-key-card__label">מפתח OpenAI API</label>
+          <input
+            type="password"
+            id="api-key-input"
+            class="api-key-card__input"
+            placeholder="sk-..."
+            autocomplete="off"
+            spellcheck="false"
+            dir="ltr"
+            aria-required="true"
+          />
+          <button class="api-key-card__toggle" id="api-key-toggle" aria-label="הצג/הסתר מפתח" type="button">👁</button>
+        </div>
+        <div class="api-key-card__error" id="api-key-error" aria-live="assertive" role="alert"></div>
+        <button class="btn btn--primary btn--full" id="api-key-confirm">
+          הפעל את NutriAgent →
+        </button>
+        <p class="api-key-card__note">
+          🔒 המפתח מאוחסן ב-<code>localStorage</code> בלבד. לאבטחה מרבית, השתמש במפתח ייעודי עם הגבלת שימוש.
+        </p>
+      </div>
+    </div>
+
+  </div><!-- /app-root -->
+
+  <!-- ================================================================
+       SCRIPTS — Loaded in dependency order
+       All modules use ES6 patterns; deferred to after DOM parse
+  ================================================================ -->
+  <script src="openaiclient.js" defer></script>
+  <script src="chatbot.js" defer></script>
+  <script src="chatbot-ui.js" defer></script>
+
+</body>
+</html>
