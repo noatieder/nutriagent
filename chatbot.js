@@ -6,7 +6,7 @@
  * Responsibilities:
  *  - Sequential FSM data collection (8 fields, strict order)
  *  - Physiological calculations: BMI, BMR, caloric targets
- *  - Pediatric BMI category mapping (ages 4–18)
+ *  - Adult BMI category mapping (WHO standard, ages 18+)
  *  - Embedded food database with K-Means cluster tags
  *  - DBSCAN -1 outlier guardrail enforcement
  *  - Cosine Similarity intra-cluster swap engine
@@ -55,30 +55,17 @@ const ACTIVITY_LEVELS = Object.freeze({
 });
 
 /* ============================================================
-   SECTION 3 — PEDIATRIC BMI THRESHOLDS
-   Source: CDC/WHO pediatric growth chart percentile cutoffs.
-   Schema: { age: [underweight_cutoff, overweight_cutoff, obese_cutoff] }
-   Logic:  bmi < thresholds[0]  → תת משקל (Underweight)
-           bmi < thresholds[1]  → משקל תקין (Normal)
-           bmi < thresholds[2]  → עודף משקל (Overweight)
-           bmi >= thresholds[2] → השמנת יתר (Obesity)
+   SECTION 3 — ADULT BMI THRESHOLDS
+   Source: WHO standard adult BMI classification.
+   Logic:  bmi < 18.5  → תת משקל (Underweight)
+           bmi < 25.0  → משקל תקין (Normal)
+           bmi < 30.0  → עודף משקל (Overweight)
+           bmi >= 30.0 → השמנת יתר (Obesity)
 ============================================================ */
-const BMI_THRESHOLDS_BY_AGE = Object.freeze({
-   4: [13.8, 17.0, 18.0],
-   5: [13.9, 17.4, 18.8],
-   6: [14.0, 17.6, 19.8],
-   7: [14.2, 18.0, 21.2],
-   8: [14.4, 18.4, 22.5],
-   9: [14.6, 19.0, 23.9],
-  10: [14.8, 19.6, 25.4],
-  11: [15.0, 20.4, 26.5],
-  12: [14.8, 19.8, 27.0],
-  13: [15.4, 21.5, 28.2],
-  14: [16.0, 22.3, 29.5],
-  15: [16.5, 23.0, 30.5],
-  16: [17.0, 23.6, 31.5],
-  17: [17.4, 24.0, 32.7],
-  18: [17.8, 24.2, 33.9],
+const ADULT_BMI_THRESHOLDS = Object.freeze({
+  UNDERWEIGHT: 18.5,
+  NORMAL:      25.0,
+  OVERWEIGHT:  30.0,
 });
 
 /* BMI category labels in Hebrew */
@@ -98,21 +85,20 @@ const BMI_CALORIE_SCALE = Object.freeze({
 });
 
 /* ============================================================
-   SECTION 4 — BASE CALORIE TABLE (BMR BASELINES)
-   Structured by gender → age bracket → base kcal.
-   Age brackets cover the full 4–18 range.
+   SECTION 4 — MIFFLIN-ST JEOR BMR FORMULA (ADULTS)
+   Mifflin, M.D. et al. (1990). A new predictive equation for
+   resting energy expenditure in healthy individuals.
+   Formula:
+     Male:   BMR = 10×weight + 6.25×height − 5×age + 5
+     Female: BMR = 10×weight + 6.25×height − 5×age − 161
+   Units: weight in kg, height in cm, age in years, result in kcal/day.
 ============================================================ */
-const BASE_CALORIES = Object.freeze({
-  male: [
-    { minAge: 4,  maxAge:  8, base: 1400 },
-    { minAge: 9,  maxAge: 13, base: 1800 },
-    { minAge: 14, maxAge: 18, base: 2200 },
-  ],
-  female: [
-    { minAge: 4,  maxAge:  8, base: 1300 },
-    { minAge: 9,  maxAge: 13, base: 1600 },
-    { minAge: 14, maxAge: 18, base: 1800 },
-  ],
+const MIFFLIN_CONSTANTS = Object.freeze({
+  weightFactor: 10,
+  heightFactor: 6.25,
+  ageFactor:    5,
+  maleOffset:   5,
+  femaleOffset: -161,
 });
 
 /* ============================================================
@@ -501,6 +487,404 @@ const FOOD_DATABASE = Object.freeze([
     servingSizeG: 180,
   },
 
+  /* ── CLUSTER 0: Additional Volume / Low-Density ─────────────── */
+  { id: 'cherry_tomato', name: 'עגבניית שרי', nameEn: 'Cherry tomato',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 18, protein: 0.9, fat: 0.2, carbs: 3.9, fiber: 1.2, sugar: 2.6 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'cabbage_raw', name: 'כרוב טרי', nameEn: 'Cabbage raw',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 25, protein: 1.3, fat: 0.1, carbs: 5.8, fiber: 2.5, sugar: 3.2 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'cauliflower', name: 'כרובית', nameEn: 'Cauliflower',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 25, protein: 1.9, fat: 0.3, carbs: 5.0, fiber: 2.0, sugar: 1.9 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'red_bell_pepper', name: 'גמבה אדומה', nameEn: 'Red bell pepper',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 31, protein: 1.0, fat: 0.3, carbs: 6.0, fiber: 2.1, sugar: 4.2 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 130,
+  },
+  { id: 'onion_raw', name: 'בצל', nameEn: 'Onion raw',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 40, protein: 1.1, fat: 0.1, carbs: 9.3, fiber: 1.7, sugar: 4.2 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 80,
+  },
+  { id: 'beet_cooked', name: 'סלק מבושל', nameEn: 'Beet cooked',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 44, protein: 1.7, fat: 0.2, carbs: 10.0, fiber: 2.0, sugar: 7.6 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'pear', name: 'אגס', nameEn: 'Pear',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 57, protein: 0.4, fat: 0.1, carbs: 15.2, fiber: 3.1, sugar: 9.8 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 160,
+  },
+  { id: 'kiwi', name: 'קיווי', nameEn: 'Kiwi fruit',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 61, protein: 1.1, fat: 0.5, carbs: 14.7, fiber: 3.0, sugar: 9.0 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'mango', name: 'מנגו', nameEn: 'Mango',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 60, protein: 0.8, fat: 0.4, carbs: 15.0, fiber: 1.6, sugar: 13.7 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'melon', name: 'מלון', nameEn: 'Cantaloupe melon',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 34, protein: 0.8, fat: 0.2, carbs: 8.2, fiber: 0.9, sugar: 7.9 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'celery', name: 'סלרי', nameEn: 'Celery',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 14, protein: 0.7, fat: 0.2, carbs: 3.0, fiber: 1.6, sugar: 1.3 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'plum', name: 'שזיף', nameEn: 'Plum',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 46, protein: 0.7, fat: 0.3, carbs: 11.4, fiber: 1.4, sugar: 9.9 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 120,
+  },
+  { id: 'kohlrabi', name: 'קולרבי', nameEn: 'Kohlrabi',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 27, protein: 1.7, fat: 0.1, carbs: 6.2, fiber: 3.6, sugar: 2.6 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 120,
+  },
+  { id: 'parsley_fresh', name: 'פטרוזיליה', nameEn: 'Parsley fresh',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 36, protein: 3.0, fat: 0.8, carbs: 6.3, fiber: 3.3, sugar: 0.9 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 20,
+  },
+  { id: 'spinach_frozen', name: 'תרד קפוא', nameEn: 'Spinach frozen',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 21, protein: 2.4, fat: 0.3, carbs: 3.0, fiber: 2.0, sugar: 0.4 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'almond_milk_unsweetened', name: 'חלב שקדים ללא סוכר', nameEn: 'Unsweetened almond milk',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 17, protein: 0.6, fat: 1.4, carbs: 0.6, fiber: 0.4, sugar: 0.0 },
+    allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 250,
+  },
+  { id: 'persimmon', name: 'אפרסמון', nameEn: 'Persimmon',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 70, protein: 0.6, fat: 0.2, carbs: 18.6, fiber: 3.6, sugar: 12.5 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'fig_fresh', name: 'תאנה טרייה', nameEn: 'Fresh fig',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 74, protein: 0.8, fat: 0.3, carbs: 19.2, fiber: 2.9, sugar: 16.3 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 50,
+  },
+  { id: 'purple_cabbage', name: 'כרוב סגול', nameEn: 'Purple cabbage',
+    cluster: 0, dbscan: 0,
+    per100g: { calories: 31, protein: 1.4, fat: 0.2, carbs: 7.4, fiber: 2.1, sugar: 3.8 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+
+  /* ── CLUSTER 1: Additional Lean Protein ─────────────────────── */
+  { id: 'milk_1pct', name: 'חלב 1% שומן', nameEn: 'Milk 1% fat',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 46, protein: 3.4, fat: 1.0, carbs: 4.9, fiber: 0.0, sugar: 4.9 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 240,
+  },
+  { id: 'sardines_water', name: 'סרדינים במים', nameEn: 'Sardines in water',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 115, protein: 24.6, fat: 1.4, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'sea_bass_fillet', name: 'פילה לברק', nameEn: 'Sea bass fillet',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 97, protein: 18.4, fat: 2.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'white_beans_cooked', name: 'שעועית לבנה מבושלת', nameEn: 'White beans cooked',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 127, protein: 8.8, fat: 0.3, carbs: 22.5, fiber: 6.3, sugar: 0.3 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'white_cheese_5pct', name: 'גבינה לבנה 5%', nameEn: 'White soft cheese 5%',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 87, protein: 10.6, fat: 5.0, carbs: 1.2, fiber: 0.0, sugar: 1.2 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 150,
+  },
+  { id: 'liquid_egg_white', name: 'חלבון ביצה נוזלי', nameEn: 'Liquid egg whites',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 52, protein: 10.9, fat: 0.2, carbs: 0.7, fiber: 0.0, sugar: 0.7 },
+    allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'mullet_fillet', name: 'פילה מוסר ים', nameEn: 'Mullet fish fillet',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 117, protein: 19.3, fat: 3.8, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'tilapia_fillet', name: 'פילה אמנון', nameEn: 'Tilapia fillet',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 96, protein: 20.1, fat: 1.7, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'yellow_cheese_9pct', name: 'גבינה צהובה 9%', nameEn: 'Yellow cheese 9% fat',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 160, protein: 18.0, fat: 9.0, carbs: 1.5, fiber: 0.0, sugar: 1.5 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 30,
+  },
+  { id: 'bulgarian_cheese_5pct', name: 'גבינה בולגרית 5%', nameEn: 'Bulgarian cheese 5%',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 87, protein: 11.5, fat: 5.0, carbs: 0.5, fiber: 0.0, sugar: 0.5 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 60,
+  },
+  { id: 'hummus_spread', name: 'חומוס ממרח ביתי', nameEn: 'Hummus spread homemade',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 177, protein: 8.0, fat: 9.6, carbs: 14.3, fiber: 4.0, sugar: 0.3 },
+    allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 80,
+  },
+  { id: 'shrimp_cooked', name: 'שרימפס מבושל', nameEn: 'Shrimp cooked',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 99, protein: 20.9, fat: 1.1, carbs: 0.9, fiber: 0.0, sugar: 0.0 },
+    allergens: ['shellfish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 120,
+  },
+  { id: 'beef_lean_5pct', name: 'בשר בקר טחון 5% שומן', nameEn: 'Lean ground beef 5%',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 164, protein: 22.0, fat: 7.8, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: [], restrictions: ['kosher','gluten-free','lactose-free'],
+    servingSizeG: 130,
+  },
+  { id: 'edamame_cooked', name: 'אדממה מבושלת', nameEn: 'Edamame cooked',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 121, protein: 11.9, fat: 5.2, carbs: 8.9, fiber: 5.2, sugar: 2.2 },
+    allergens: ['soy'], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'baked_chicken_schnitzel', name: 'שניצל עוף אפוי', nameEn: 'Baked chicken schnitzel',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 162, protein: 24.0, fat: 4.5, carbs: 5.0, fiber: 0.5, sugar: 0.3 },
+    allergens: ['gluten','eggs'], restrictions: ['kosher','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'tempeh', name: 'טמפה', nameEn: 'Tempeh',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 192, protein: 20.3, fat: 11.4, carbs: 7.6, fiber: 0.0, sugar: 0.0 },
+    allergens: ['soy'], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'canned_mackerel', name: 'מקרל בשימורים', nameEn: 'Canned mackerel',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 156, protein: 19.4, fat: 8.6, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+  { id: 'cottage_cheese_9pct', name: 'גבינת קוטג׳ 9%', nameEn: 'Cottage cheese 9% fat',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 115, protein: 11.0, fat: 4.5, carbs: 3.4, fiber: 0.0, sugar: 3.4 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 150,
+  },
+  { id: 'vegetable_shakshuka', name: 'שקשוקה ירקות', nameEn: 'Vegetable shakshuka',
+    cluster: 1, dbscan: 0,
+    per100g: { calories: 60, protein: 3.0, fat: 3.5, carbs: 5.0, fiber: 1.5, sugar: 3.0 },
+    allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
+    servingSizeG: 250,
+  },
+
+  /* ── CLUSTER 2: Additional Essential Fats ───────────────────── */
+  { id: 'sunflower_seeds', name: 'גרעיני חמנייה', nameEn: 'Sunflower seeds',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 584, protein: 20.8, fat: 51.5, carbs: 20.0, fiber: 8.6, sugar: 2.6 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'pumpkin_seeds', name: 'גרעיני דלעת', nameEn: 'Pumpkin seeds',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 559, protein: 30.2, fat: 49.1, carbs: 10.7, fiber: 6.0, sugar: 1.4 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'almond_butter', name: 'ממרח שקדים טבעי', nameEn: 'Natural almond butter',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 614, protein: 20.9, fat: 55.5, carbs: 18.8, fiber: 10.3, sugar: 4.4 },
+    allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 32,
+  },
+  { id: 'peanuts_raw', name: 'בוטנים גולמיים', nameEn: 'Raw peanuts',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 567, protein: 25.8, fat: 49.2, carbs: 16.1, fiber: 8.5, sugar: 4.7 },
+    allergens: ['peanuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'brazil_nuts', name: 'אגוז ברזיל', nameEn: 'Brazil nuts',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 656, protein: 14.3, fat: 66.4, carbs: 11.7, fiber: 7.5, sugar: 3.3 },
+    allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'sesame_oil', name: 'שמן שומשום', nameEn: 'Sesame oil',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 7,
+  },
+  { id: 'coconut_shredded', name: 'קוקוס מגורד', nameEn: 'Shredded coconut unsweetened',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 660, protein: 6.9, fat: 64.5, carbs: 23.7, fiber: 16.3, sugar: 6.9 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 20,
+  },
+  { id: 'pecan', name: 'פקאן', nameEn: 'Pecans',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 691, protein: 9.2, fat: 72.0, carbs: 13.9, fiber: 9.6, sugar: 3.9 },
+    allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'dark_chocolate_85', name: 'שוקולד מריר 85%', nameEn: 'Dark chocolate 85%',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 598, protein: 8.5, fat: 42.6, carbs: 45.9, fiber: 10.9, sugar: 24.2 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 20,
+  },
+  { id: 'hemp_seeds', name: 'זרעי המפ', nameEn: 'Hemp seeds',
+    cluster: 2, dbscan: 0,
+    per100g: { calories: 553, protein: 31.6, fat: 48.7, carbs: 8.7, fiber: 4.0, sugar: 1.5 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+
+  /* ── CLUSTER 3: Additional Complex Carbohydrates ─────────────── */
+  { id: 'rye_bread', name: 'לחם שיפון מלא', nameEn: 'Whole grain rye bread',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 259, protein: 8.5, fat: 3.3, carbs: 48.3, fiber: 5.8, sugar: 3.3 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 60,
+  },
+  { id: 'couscous_cooked', name: 'קוסקוס מבושל', nameEn: 'Couscous cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 112, protein: 3.8, fat: 0.2, carbs: 23.2, fiber: 1.4, sugar: 0.1 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'potato_boiled', name: 'תפוח אדמה מבושל', nameEn: 'Boiled potato',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 78, protein: 1.9, fat: 0.1, carbs: 17.8, fiber: 2.4, sugar: 0.8 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'basmati_rice_cooked', name: 'אורז בסמטי מבושל', nameEn: 'Basmati rice cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 121, protein: 2.7, fat: 0.4, carbs: 25.2, fiber: 0.4, sugar: 0.0 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'polenta_cooked', name: 'פולנטה מבושלת', nameEn: 'Polenta cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 70, protein: 1.6, fat: 0.7, carbs: 15.6, fiber: 0.7, sugar: 0.4 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'barley_cooked', name: 'שעורה מבושלת', nameEn: 'Barley cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 123, protein: 2.3, fat: 0.4, carbs: 28.2, fiber: 3.8, sugar: 0.3 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'black_lentils_cooked', name: 'עדשים שחורות מבושלות', nameEn: 'Black lentils cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 101, protein: 8.0, fat: 0.4, carbs: 17.0, fiber: 7.0, sugar: 1.6 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'fava_beans_cooked', name: 'פול מבושל', nameEn: 'Fava beans cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 110, protein: 7.6, fat: 0.4, carbs: 19.7, fiber: 5.4, sugar: 1.8 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 200,
+  },
+  { id: 'green_peas_cooked', name: 'אפונה ירוקה מבושלת', nameEn: 'Green peas cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 84, protein: 5.4, fat: 0.4, carbs: 15.6, fiber: 5.5, sugar: 5.7 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'whole_wheat_bread', name: 'לחם מחיטה מלאה', nameEn: 'Whole wheat bread',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 247, protein: 12.6, fat: 3.4, carbs: 41.3, fiber: 7.0, sugar: 5.2 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 60,
+  },
+  { id: 'white_rice_cooked', name: 'אורז לבן מבושל', nameEn: 'White rice cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 130, protein: 2.7, fat: 0.3, carbs: 28.2, fiber: 0.4, sugar: 0.0 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 150,
+  },
+  { id: 'oatmeal_cooked', name: 'דייסת שיבולת שועל', nameEn: 'Oatmeal cooked',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 71, protein: 2.5, fat: 1.4, carbs: 12.0, fiber: 1.7, sugar: 0.0 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 250,
+  },
+  { id: 'whole_grain_cornflakes', name: 'קורנפלקס מחיטה מלאה', nameEn: 'Whole grain cornflakes',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 356, protein: 8.5, fat: 3.6, carbs: 72.0, fiber: 9.0, sugar: 8.0 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 40,
+  },
+  { id: 'muesli_natural', name: 'מוזלי טבעי', nameEn: 'Natural muesli',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 368, protein: 9.4, fat: 6.3, carbs: 69.0, fiber: 7.0, sugar: 14.0 },
+    allergens: ['gluten','tree-nuts'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 50,
+  },
+  { id: 'dates_dried', name: 'תמרים יבשים', nameEn: 'Dried dates Medjool',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 282, protein: 2.5, fat: 0.4, carbs: 75.0, fiber: 8.0, sugar: 63.4 },
+    allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 30,
+  },
+  { id: 'tortilla_whole_wheat', name: 'טורטייה מחיטה מלאה', nameEn: 'Whole wheat tortilla',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 218, protein: 6.0, fat: 4.0, carbs: 39.0, fiber: 3.0, sugar: 1.8 },
+    allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
+    servingSizeG: 40,
+  },
+  { id: 'baked_falafel', name: 'פלאפל אפוי', nameEn: 'Baked falafel',
+    cluster: 3, dbscan: 0,
+    per100g: { calories: 180, protein: 9.0, fat: 8.0, carbs: 18.0, fiber: 5.0, sugar: 1.2 },
+    allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
+    servingSizeG: 100,
+  },
+
   /* ── DBSCAN -1: OUTLIERS — BLOCKED FOR PRIVATE USERS ─────────
      These items require explicit clinical authorization.
      They appear in the DB for dietitian-mode reference only.
@@ -536,6 +920,22 @@ const FOOD_DATABASE = Object.freeze([
     allergens: ['dairy','gluten'], restrictions: [],
     servingSizeG: 100,
     dbscanNote: 'תוסף תעשייתי לעלייה במסה — דורש אישור תזונאי',
+  },
+  {
+    id: 'industrial_margarine', name: 'מרגרינה תעשייתית (טרנס)', nameEn: 'Industrial margarine trans fats',
+    cluster: 2, dbscan: -1,
+    per100g: { calories: 719, protein: 0.9, fat: 79.0, carbs: 1.0, fiber: 0.0, sugar: 0.0 },
+    allergens: ['dairy'], restrictions: [],
+    servingSizeG: 10,
+    dbscanNote: 'שומן טרנס תעשייתי — חסום אוטומטית, סיכון קרדיווסקולרי',
+  },
+  {
+    id: 'sweetened_condensed_milk', name: 'חלב מרוכז ממותק', nameEn: 'Sweetened condensed milk',
+    cluster: 3, dbscan: -1,
+    per100g: { calories: 321, protein: 7.9, fat: 8.7, carbs: 54.4, fiber: 0.0, sugar: 54.4 },
+    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
+    servingSizeG: 30,
+    dbscanNote: 'ריכוז סוכר קיצוני (54g/100g) — חסום אוטומטית לפרופיל פרטי',
   },
 ]);
 
@@ -661,61 +1061,49 @@ function calculateBMI(weightKg, heightCm) {
 }
 
 /**
- * Returns the nearest age key from the BMI thresholds table.
- * Interpolates by selecting the closest defined age entry.
- * @param {number} age
- * @returns {number} resolved age key
- */
-function resolveAgeKey(age) {
-  const keys = Object.keys(BMI_THRESHOLDS_BY_AGE).map(Number);
-  return keys.reduce((closest, key) =>
-    Math.abs(key - age) < Math.abs(closest - age) ? key : closest
-  );
-}
-
-/**
- * Maps a BMI value to a pediatric BMI category string (Hebrew).
+ * Maps an adult BMI value to a BMI category string (Hebrew).
+ * Uses WHO standard adult classification (no age dependency).
  * @param {number} bmi
- * @param {number} age
  * @returns {string} Hebrew BMI category
  */
-function getBMICategory(bmi, age) {
-  const key = resolveAgeKey(age);
-  const [underCutoff, overCutoff, obeseCutoff] = BMI_THRESHOLDS_BY_AGE[key];
-
-  if (bmi < underCutoff)  return BMI_CATEGORIES.UNDERWEIGHT;
-  if (bmi < overCutoff)   return BMI_CATEGORIES.NORMAL;
-  if (bmi < obeseCutoff)  return BMI_CATEGORIES.OVERWEIGHT;
+function getBMICategory(bmi) {
+  if (bmi < ADULT_BMI_THRESHOLDS.UNDERWEIGHT) return BMI_CATEGORIES.UNDERWEIGHT;
+  if (bmi < ADULT_BMI_THRESHOLDS.NORMAL)      return BMI_CATEGORIES.NORMAL;
+  if (bmi < ADULT_BMI_THRESHOLDS.OVERWEIGHT)  return BMI_CATEGORIES.OVERWEIGHT;
   return BMI_CATEGORIES.OBESE;
 }
 
 /**
- * Returns the base caloric target for a given gender and age.
+ * Calculates BMR using the Mifflin-St Jeor equation for adults.
+ * @param {number} age — years
  * @param {'male'|'female'} gender
- * @param {number} age
- * @returns {number} base kcal
+ * @param {number} weightKg
+ * @param {number} heightCm
+ * @returns {number} BMR in kcal/day (rounded)
  */
-function getBaseCalories(gender, age) {
-  const brackets = BASE_CALORIES[gender] || BASE_CALORIES.male;
-  const bracket = brackets.find(b => age >= b.minAge && age <= b.maxAge);
-  return bracket ? bracket.base : 1800; // fallback
+function calculateMifflinBMR(age, gender, weightKg, heightCm) {
+  const { weightFactor, heightFactor, ageFactor, maleOffset, femaleOffset } = MIFFLIN_CONSTANTS;
+  const base = weightFactor * weightKg + heightFactor * heightCm - ageFactor * age;
+  return Math.round(gender === 'male' ? base + maleOffset : base + femaleOffset);
 }
 
 /**
  * Calculates the final adjusted daily caloric target.
- * Formula:
- *   1. Get gender/age base kcal
+ * Formula (Mifflin-St Jeor):
+ *   1. BMR = 10×weight + 6.25×height − 5×age ± offset
  *   2. Add activity delta (+0 / +200 / +400)
  *   3. Multiply by BMI category scaling factor
  *
  * @param {number} age
  * @param {'male'|'female'} gender
+ * @param {number} weightKg
+ * @param {number} heightCm
  * @param {string} activityId — 'low' | 'moderate' | 'high'
  * @param {string} bmiCategory — Hebrew category string
  * @returns {{ bmrBase: number, activityAdjusted: number, finalTarget: number, scaleFactor: number }}
  */
-function calculateCaloricTarget(age, gender, activityId, bmiCategory) {
-  const bmrBase = getBaseCalories(gender, age);
+function calculateCaloricTarget(age, gender, weightKg, heightCm, activityId, bmiCategory) {
+  const bmrBase = calculateMifflinBMR(age, gender, weightKg, heightCm);
 
   const activityEntry = Object.values(ACTIVITY_LEVELS)
     .find(a => a.id === activityId) || ACTIVITY_LEVELS.LOW;
@@ -744,7 +1132,8 @@ function buildCalorieNarrative(profile, metrics) {
     : `הפחתה ${Math.abs(scalePercent)}% (ירידה מובנית ומדורגת)`;
 
   return (
-    `BMR בסיס (גיל ${profile.age}, ${profile.gender === 'male' ? 'זכר' : 'נקבה'}): ${bmrBase} קק"ל | ` +
+    `BMR (Mifflin-St Jeor, ${profile.gender === 'male' ? 'זכר' : 'נקבה'}, גיל ${profile.age}, ` +
+    `${profile.weight}ק"ג, ${profile.height}ס"מ): ${bmrBase} קק"ל | ` +
     `רמת פעילות — ${activityLabel}: +${activityAdjusted - bmrBase} קק"ל → ${activityAdjusted} קק"ל | ` +
     `BMI: ${bmi} (${bmiCategory}) — ${scaleDesc} → ` +
     `יעד קלורי סופי: ${finalTarget} קק"ל/יום`
@@ -902,6 +1291,75 @@ function createEmptyProfile() {
 }
 
 /* ============================================================
+   SECTION 12B — CONTRADICTION DETECTOR (TC-05 Failure Scenario)
+   Runs before meal plan generation to catch logical inconsistencies
+   that would produce a nutritionally impossible or dangerous plan.
+============================================================ */
+
+/**
+ * Detects logical contradictions in the user profile.
+ * TC-05: vegan + rejecting all plant proteins = nutritionally impossible plan.
+ * @param {object} profile - complete FSM user profile
+ * @returns {{ contradiction: boolean, message: string }}
+ */
+function detectContradiction(profile) {
+  const restrictions = (profile.restrictions || []).map(r => r.toLowerCase());
+  const dislikes     = (profile.dislikes     || []).map(d => d.toLowerCase());
+
+  const isVegan      = restrictions.some(r => r.includes('טבעוני') || r.includes('vegan'));
+  const isVegetarian = restrictions.some(r => r.includes('צמחוני') || r.includes('vegetarian'));
+
+  // Vegan source keywords — if all are rejected it's impossible
+  const veganProteinSources = ['טופו', 'קטניות', 'עדשים', 'חומוס', 'שעועית', 'אפונה', 'tofu', 'lentils', 'legumes'];
+  const veganFatSources     = ['אגוזים', 'שקדים', 'אבוקדו', 'טחינה', 'nuts', 'avocado', 'tahini'];
+
+  if (isVegan) {
+    const blockedProteins = veganProteinSources.filter(src =>
+      dislikes.some(d => d.includes(src) || src.includes(d))
+    );
+    const blockedFats = veganFatSources.filter(src =>
+      dislikes.some(d => d.includes(src) || src.includes(d))
+    );
+
+    if (blockedProteins.length >= 4) {
+      return {
+        contradiction: true,
+        message:
+          '⚠️ **זוהתה סתירה לוגית בפרופיל**\n\n' +
+          `בחרת בתפריט **טבעוני** אך דחית את רוב מקורות החלבון הצמחיים: ${blockedProteins.join(', ')}.\n\n` +
+          'ללא קטניות, טופו ואגוזים, לא ניתן לבנות תפריט טבעוני שלם ומאוזן התואם את הצרכים הקלוריים שלך.\n\n' +
+          'אנא ערוך את ה**דחיות** או את **ההגבלות התזונתיות** כדי שנוכל לייצר תפריט מתאים.',
+      };
+    }
+  }
+
+  // Gluten-free + listing gluten foods as mandatory
+  const isGlutenFree = restrictions.some(r => r.includes('גלוטן') || r.includes('gluten'));
+  if (isGlutenFree) {
+    const glutenFoodInDislikes = ['פסטה','לחם','חיטה','קוסקוס','בורגול','פיתה'];
+    // No contradiction here — just filtering — so no action needed.
+  }
+
+  // All animal products rejected + NOT vegan (borderline vegetarian but rejecting dairy+eggs)
+  const rejectsAllDairy = ['חלב','גבינה','יוגורט','ביצה','eggs','dairy'].every(item =>
+    dislikes.some(d => d.includes(item))
+  );
+  if (isVegetarian && rejectsAllDairy) {
+    return {
+      contradiction: true,
+      message:
+        '⚠️ **זוהתה סתירה לוגית בפרופיל שלך**\n\n' +
+        'בחרת בתפריט **צמחוני** (לא טבעוני) אך דחית גם מוצרי חלב וגם ביצים.\n\n' +
+        'תפריט צמחוני מתבסס בדרך כלל על מוצרי חלב וביצים. ' +
+        'אם אינך אוכל אף מוצר מן החי, שקול לשנות ל**טבעוני**.\n\n' +
+        'אנא ערוך את **ההגבלות** או את **הדחיות**.',
+    };
+  }
+
+  return { contradiction: false, message: '' };
+}
+
+/* ============================================================
    SECTION 13 — FSM ENGINE CLASS
    The central state machine controlling the entire conversation.
    Instantiated once; UI layer (chatbot-ui.js) calls
@@ -933,6 +1391,10 @@ class NutriAgentFSM {
    */
   async process(rawInput) {
     const input = (rawInput || '').trim();
+    const L = window.NutriLogger;
+    L?.debug('FSM', `process() state="${this.state}" input="${input.slice(0,50)}"`);
+
+    try {
 
     // Language guard — reject non-Hebrew input at any stage
     if (input.length > 0 && isNonHebrew(input)) {
@@ -981,6 +1443,15 @@ class NutriAgentFSM {
       default:
         return this._response('אירעה שגיאה פנימית. אנא רעננו את הדף.', { type: 'error' });
     }
+
+    } catch (fsmErr) {
+      window.NutriLogger?.error('FSM', `Exception in state "${this.state}": ${fsmErr.message}`, {
+        state: this.state,
+        input: input.slice(0, 80),
+        stack: fsmErr.stack,
+      });
+      throw fsmErr;  // re-throw so UI catch block still handles it
+    }
   }
 
   /* ----------------------------------------------------------
@@ -991,19 +1462,22 @@ class NutriAgentFSM {
     const greeting = [
       '🌿 **ברוכים הבאים ל-NutriAgent**',
       '',
-      'אני מערכת בינה מלאכותית לתמיכה תזונתית, מיועדת לילדים ובני נוער בגילאי 4–18.',
+      'אני מערכת בינה מלאכותית לתמיכה תזונתית, מיועדת למשתמשים פרטיים ולדיאטניות קליניות.',
       '',
-      '⚕️ **הצהרה חשובה:** מערכת זו היא כלי תמיכה בלבד ואינה מהווה תחליף לייעוץ מקצועי של תזונאי/ת מוסמך/ת או רופא/ה. המלצות המערכת מבוססות על נתונים כלליים ואינן מותאמות למצב רפואי ספציפי.',
+      '🔵 **מצב פרטי** — ממשק שיחה לקבלת תפריט מותאם אישית',
+      '🟣 **מצב קליני** — תצוגת נתונים גולמיים: BMR מדויק, אשכולות K-Means, מקרו-נוטריאנטים',
       '',
-      'כדי להתחיל, אשאל אותך מספר שאלות בסיסיות כדי להכיר את הפרופיל התזונתי.',
+      '⚕️ **הצהרה:** מערכת זו היא כלי תמיכה ואינה מהווה תחליף לייעוץ דיאטנ/ית מוסמך/ת.',
       '',
-      '**מה גיל הילד/ה?**',
+      'כדי להתאים לך תוכנית תזונה אישית, אשאל כמה שאלות קצרות.',
+      '',
+      '**מה גילך?**',
     ].join('\n');
 
     this.state = FSM_STATES.AGE;
     return this._response(greeting, {
       type: 'greeting',
-      quickChips: ['4', '8', '12', '14', '16', '18'],
+      quickChips: ['22', '30', '40', '50', '60', '70'],
     });
   }
 
@@ -1012,8 +1486,8 @@ class NutriAgentFSM {
   ---------------------------------------------------------- */
   _handleGreeting(input) {
     this.state = FSM_STATES.AGE;
-    return this._response('**מה גיל הילד/ה?** (גילאים 4–18)', {
-      quickChips: ['4', '8', '10', '13', '16', '18'],
+    return this._response('**מה גילך?**', {
+      quickChips: ['22', '30', '40', '50', '60', '70'],
     });
   }
 
@@ -1026,15 +1500,15 @@ class NutriAgentFSM {
 
     if (isNaN(age)) {
       return this._response(
-        'לא הצלחתי לזהות גיל תקין. אנא הזן מספר שלם בלבד (לדוגמה: **12**).',
+        'לא הצלחתי לזהות גיל תקין. אנא הזן מספר שלם בלבד (לדוגמה: **35**).',
         { type: 'validation' }
       );
     }
-    if (age < 4 || age > 18) {
+    if (age < 18 || age > 120) {
       return this._response(
-        `מערכת NutriAgent מותאמת לטווח גילאים **4 עד 18** בלבד.\n` +
-        `הגיל שהוזן (${age}) אינו נמצא בטווח זה.\n` +
-        `אנא הזן גיל בין 4 ל-18.`,
+        `NutriAgent מיועד למשתמשים בוגרים בגיל **18 ומעלה**.\n` +
+        `הגיל שהוזן (${age}) אינו בטווח הנתמך.\n` +
+        `אנא הזן גיל בין 18 ל-120.`,
         { type: 'validation' }
       );
     }
@@ -1043,7 +1517,7 @@ class NutriAgentFSM {
     this.state = FSM_STATES.GENDER;
 
     return this._response(
-      `✅ גיל: **${age}**\n\n**מה המין?**\nאנא בחר: **זכר** או **נקבה**`,
+      `✅ גיל: **${age}**\n\n**מה המין הביולוגי?**\nאנא בחר: **זכר** או **נקבה**\n*(נדרש לחישוב BMR מדויק לפי Mifflin-St Jeor)*`,
       {
         quickChips: ['זכר', 'נקבה'],
         profileUpdate: { age },
@@ -1058,8 +1532,8 @@ class NutriAgentFSM {
   _handleGender(input) {
     let gender = null;
 
-    const malePhrases  = ['זכר', 'בן', 'ילד', 'male', 'boy'];
-    const femalePhrases = ['נקבה', 'בת', 'ילדה', 'female', 'girl'];
+    const malePhrases  = ['זכר', 'גבר', 'male', 'man'];
+    const femalePhrases = ['נקבה', 'אישה', 'female', 'woman'];
 
     const lc = input.toLowerCase();
     if (malePhrases.some(p => lc.includes(p)))   gender = 'male';
@@ -1078,9 +1552,9 @@ class NutriAgentFSM {
 
     const genderLabel = gender === 'male' ? 'זכר' : 'נקבה';
     return this._response(
-      `✅ מין: **${genderLabel}**\n\n**מה המשקל?** (בקילוגרמים)`,
+      `✅ מין: **${genderLabel}**\n\n**מה משקלך?** (בקילוגרמים)`,
       {
-        quickChips: ['20', '35', '45', '55', '65', '75'],
+        quickChips: ['55', '65', '75', '85', '95', '110'],
         profileUpdate: { gender: genderLabel },
       }
     );
@@ -1104,9 +1578,9 @@ class NutriAgentFSM {
     this.state = FSM_STATES.HEIGHT;
 
     return this._response(
-      `✅ משקל: **${weight} ק"ג**\n\n**מה הגובה?** (בסנטימטרים)`,
+      `✅ משקל: **${weight} ק"ג**\n\n**מה גובהך?** (בסנטימטרים)`,
       {
-        quickChips: ['120', '140', '155', '165', '170', '180'],
+        quickChips: ['155', '162', '168', '175', '182', '190'],
         profileUpdate: { weight: `${weight} ק"ג` },
       }
     );
@@ -1119,9 +1593,9 @@ class NutriAgentFSM {
   _handleHeight(input) {
     const height = parseFloat(input.replace(/[^\d.]/g, ''));
 
-    if (isNaN(height) || height < 80 || height > 220) {
+    if (isNaN(height) || height < 130 || height > 220) {
       return this._response(
-        'אנא הזן גובה תקין בסנטימטרים (לדוגמה: **155**).',
+        'אנא הזן גובה תקין בסנטימטרים (לדוגמה: **170**).',
         { type: 'validation' }
       );
     }
@@ -1130,10 +1604,12 @@ class NutriAgentFSM {
 
     // Trigger BMI / BMR computation
     const bmi = calculateBMI(this.profile.weight, height);
-    const bmiCategory = getBMICategory(bmi, this.profile.age);
+    const bmiCategory = getBMICategory(bmi);
     const caloricData = calculateCaloricTarget(
       this.profile.age,
       this.profile.gender,
+      this.profile.weight,
+      height,
       'low',  // placeholder until activity is set; recalculated later
       bmiCategory
     );
@@ -1205,6 +1681,8 @@ class NutriAgentFSM {
     const caloricData = calculateCaloricTarget(
       this.profile.age,
       this.profile.gender,
+      this.profile.weight,
+      this.profile.height,
       activityId,
       this.profile.bmiCategory
     );
@@ -1349,12 +1827,22 @@ class NutriAgentFSM {
     const lc = input.toLowerCase().trim();
 
     if (lc.includes('המשך') || lc === 'continue') {
+      // TC-05: Run contradiction check before generating
+      const { contradiction, message } = detectContradiction(this.profile);
+      if (contradiction) {
+        this.state = FSM_STATES.SUMMARY;   // Stay at summary for correction
+        return this._response(message, {
+          type: 'contradiction-error',
+          quickChips: ['עריכה'],
+        });
+      }
+
       this.state = FSM_STATES.GENERATING;
       return this._response(
         `מעולה! ${genderInflect(this.profile.detectedGender || this.profile.gender, 'מתחיל', 'מתחילה')} ליצור את תוכנית הארוחות עבורך…\n` +
         '🧬 מפעיל מנוע K-Means ו-DBSCAN…\n' +
         '⚙️ מחשב פרמטרים תזונתיים…\n' +
-        '🤖 שולח נתונים לבינה מלאכותית…',
+        '🤖 שולח נתונים ל-Gemini 2.5 Flash…',
         { type: 'generating', triggerGeneration: true }
       );
     }
@@ -1425,7 +1913,7 @@ class NutriAgentFSM {
     this._clearProfileField(targetState);
 
     const fieldPrompts = {
-      [FSM_STATES.AGE]:          'מה הגיל החדש? (4–18)',
+      [FSM_STATES.AGE]:          'מה גילך? (18+)',
       [FSM_STATES.GENDER]:       'מה המין? (זכר / נקבה)',
       [FSM_STATES.WEIGHT]:       'מה המשקל החדש? (בק"ג)',
       [FSM_STATES.HEIGHT]:       'מה הגובה החדש? (בס"מ)',

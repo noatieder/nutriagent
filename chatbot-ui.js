@@ -273,9 +273,14 @@ async function submitInput(text) {
 
   } catch (err) {
     hideTypingIndicator();
-    console.error('[NutriAgent UI]', err);
+    window.NutriLogger?.error('UI', `submitInput catch: ${err.message}`, {
+      state: window.NutriAgent?.fsm?.state,
+      input: text?.slice(0, 80),
+      stack: err.stack,
+    });
+    console.error('[NutriAgent UI] Unexpected error:', err);
     renderAgentMessage(
-      '❌ אירעה שגיאה בלתי צפויה. אנא רענן את הדף ונסה שוב.',
+      `❌ שגיאה בלתי צפויה: **${err.message}**\n\nפתח את Console ← הקלד \`nutriLogs()\` לפרטים מלאים.`,
       { type: 'error' }
     );
   } finally {
@@ -420,10 +425,13 @@ async function handleFollowupQuery(text) {
   hideTypingIndicator();
 
   if (result.success) {
-    renderAgentMessage(result.reply, { type: 'followup' });
-    // Store in chat history for context
-    UIState.chatHistory.push({ question: text, answer: result.reply });
-    if (UIState.chatHistory.length > 8) UIState.chatHistory.shift();
+    // TC-06: off-domain request — show styled error bubble
+    const msgType = result.isOffDomain ? 'off-domain-error' : 'followup';
+    renderAgentMessage(result.reply, { type: msgType });
+    if (!result.isOffDomain) {
+      UIState.chatHistory.push({ question: text, answer: result.reply });
+      if (UIState.chatHistory.length > 8) UIState.chatHistory.shift();
+    }
   } else {
     renderAgentMessage(result.reply || 'שגיאה בעיבוד השאלה.', { type: 'error' });
   }
@@ -442,7 +450,9 @@ function renderAgentMessage(text, meta = {}) {
   if (!text && !meta.type) return;
 
   const msgEl = document.createElement('div');
-  msgEl.className = `message message--agent${meta.type === 'warning' ? ' message--warning' : ''}${meta.type === 'error' ? ' message--error' : ''}`;
+  const isError   = meta.type === 'error' || meta.type === 'off-domain-error';
+  const isWarning = meta.type === 'warning' || meta.type === 'contradiction-error';
+  msgEl.className = `message message--agent${isWarning ? ' message--warning' : ''}${isError ? ' message--error' : ''}`;
 
   // Avatar
   const avatar = document.createElement('div');
@@ -634,7 +644,7 @@ function updateProfileFields(fields) {
 
   Object.entries(fields).forEach(([label, value]) => {
     const key = label.replace(/\s+/g, '_');
-    let fieldEl = DOM.profileFieldsMap[key];
+    let fieldEl = UIState.profileFieldsMap[key];
 
     if (!fieldEl) {
       // Create new field row
@@ -651,7 +661,7 @@ function updateProfileFields(fields) {
       div.appendChild(dt);
       div.appendChild(dd);
       DOM.profileFields.appendChild(div);
-      DOM.profileFieldsMap[key] = dd;
+      UIState.profileFieldsMap[key] = dd;
     } else {
       // Update existing
       fieldEl.textContent = value;

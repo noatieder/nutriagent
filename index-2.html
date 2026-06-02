@@ -702,16 +702,16 @@
         <div class="api-key-card__logo" aria-hidden="true">🌿</div>
         <h1 class="api-key-card__title" id="api-key-overlay-title">ברוכים הבאים ל-NutriAgent</h1>
         <p class="api-key-card__desc">
-          כדי להפעיל את המערכת, יש להזין מפתח API תקין של OpenAI.<br/>
-          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי OpenAI.
+          כדי להפעיל את המערכת, יש להזין מפתח API תקין של Google Gemini.<br/>
+          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי Google.
         </p>
         <div class="api-key-card__input-group">
-          <label for="api-key-input" class="api-key-card__label">מפתח OpenAI API</label>
+          <label for="api-key-input" class="api-key-card__label">מפתח Google Gemini API</label>
           <input
             type="password"
             id="api-key-input"
             class="api-key-card__input"
-            placeholder="sk-..."
+            placeholder="AIza..."
             autocomplete="off"
             spellcheck="false"
             dir="ltr"
@@ -735,7 +735,8 @@
        SCRIPTS — Loaded in dependency order
        All modules use ES6 patterns; deferred to after DOM parse
   ================================================================ -->
-  <script src="openaiclient.js" defer></script>
+  <script src="nutrilogger.js"></script>
+  <script src="geminiclient.js" defer></script>
   <script src="chatbot.js" defer></script>
   <script src="chatbot-ui.js" defer></script>
 
