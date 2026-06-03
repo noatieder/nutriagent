@@ -1,11 +1,11 @@
-# 🌿 NutriAgent — מערכת תמיכה תזונתית קלינית חכמה
+# 🌿 NutriAgent — מערכת תמיכה תזונתית חכמה
 
-> **פלטפורמה דו-מצבית לתזונאים קליניים ומשתמשים פרטיים בוגרים (18+)**
+> **ממשק שיחה תזונתי אישי למשתמשים מגיל 16+ | מבוסס Groq Llama 3.3**
 
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES6+-F7DF1E?style=flat&logo=javascript&logoColor=black)
 ![HTML5](https://img.shields.io/badge/HTML5-Vanilla-E34F26?style=flat&logo=html5&logoColor=white)
-![CSS3](https://img.shields.io/badge/CSS3-RTL-1572B6?style=flat&logo=css3&logoColor=white)
-![Gemini](https://img.shields.io/badge/Google_Gemini-2.5_Flash-4285F4?style=flat&logo=google&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-RTL_Dark/Light-1572B6?style=flat&logo=css3&logoColor=white)
+![Groq](https://img.shields.io/badge/Groq-Llama_3.3_70B-F55036?style=flat)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 
 ---
@@ -13,133 +13,133 @@
 ## 📋 תוכן עניינים
 
 - [סקירה כללית](#סקירה-כללית)
-- [תכונות מרכזיות](#תכונות-מרכזיות)
-- [ארכיטקטורה טכנית](#ארכיטקטורה-טכנית)
-- [מבנה הפרויקט](#מבנה-הפרויקט)
+- [תכונות](#תכונות)
+- [ארכיטקטורה](#ארכיטקטורה)
+- [מבנה קבצים](#מבנה-קבצים)
 - [התקנה והרצה](#התקנה-והרצה)
 - [זרימת המערכת](#זרימת-המערכת)
-- [מודלים של Data Science](#מודלים-של-data-science)
+- [מודלי Data Science](#מודלי-data-science)
 - [מקרי בדיקה](#מקרי-בדיקה)
 - [אבטחה ופרטיות](#אבטחה-ופרטיות)
-- [הצהרת רפואית](#הצהרת-רפואית)
+- [הצהרה רפואית](#הצהרה-רפואית)
 
 ---
 
 ## סקירה כללית
 
-**NutriAgent** היא מערכת בינה מלאכותית לתמיכה תזונתית המשלבת:
+**NutriAgent** היא אפליקציה client-side לתמיכה תזונתית אישית המשלבת:
 
-- **Finite State Machine (FSM)** לאיסוף נתונים סדרתי קפדני — 18 מצבים
-- **חישוב BMR — Mifflin-St Jeor** לבוגרים (גיל 18+): `10×משקל + 6.25×גובה − 5×גיל ± offset`
-- **WHO Adult BMI Classification** — תת משקל / תקין / עודף / השמנה
-- **מסד נתונים מוטמע** מבוסס USDA National Nutrient Database — 130+ פריטים
-- **K-Means Clustering** — K=4 אשכולות מאקרו-נוטריאנטים (Silhouette=0.582)
-- **DBSCAN Guardrails** — 6 פריטים חריגים חסומים אוטומטית למשתמשים פרטיים
-- **Cosine Similarity Engine** — החלפות ארוחות חכמות תוך-אשכוליות בלבד
-- **Google Gemini 2.5 Flash API** — יצירת תוכניות ארוחות עם JSON schema מחייב
-- **ממשק עברית מלא** עם נטייה מגדרית דינמית (זכר/נקבה)
-- **NutriLogger** — תשתית לוגים מובנית לדיבאג עם `nutriLogs()` בקונסול
-
----
-
-## תכונות מרכזיות
-
-### 👤 מצב משתמש פרטי
-- שיחה אינטראקטיבית בעברית תקנית עם chips מהירים לכל שאלה
-- איסוף 8 פרמטרים תזונתיים בסדר קפדני עם ולידציה מלאה
-- BMI ו-BMR מיידיים לאחר הזנת גובה ומשקל (Mifflin-St Jeor)
-- תוכנית ארוחות יומית ל-6 ארוחות עם תגי K-Means
-- החלפת ארוחות חכמה — Cosine Similarity תוך-אשכולית בלבד
-- צ'אט המשך ייעודי (Q&A) מוגבל לתוכנית שנוצרה
-- גילוי בקשות מחוץ לדומיין (TC-06) עם הודעת שגיאה מובנת
-
-### 🩺 מצב תזונאי קליני
-- גישה מורחבת לנתונים גולמיים: BMR, K-Means clusters, מאקרו-נוטריאנטים
-- יומן ביקורת (Clinical Audit Log) מפורט
-- צפייה בפריטי DBSCAN -1 (חסומים למשתמשים פרטיים)
-- סיכום קליני טכני לתיק המטופל
-
-### 📊 לוח תוצאות (Dashboard)
-- 6 כרטיסי ארוחה עם שעות מומלצות ותגי K-Means
-- כפתור החלפת ארוחה עם מודאל Cosine Similarity
-- פירוט קלורי קליני (Mifflin-St Jeor breakdown)
-- סכם DBSCAN ואישור ציות לאילוצים
-- אזור Q&A מוטמע לשאלות המשך — גלוי ישירות מתחת לתוכנית
-- כפתור הדפסה/PDF
-
-### 🧬 אשכולות K-Means — אינטראקטיביים
-- לחיצה על כל אשכול (0–3) בסרגל הצד הימני פותחת טבלה מלאה
-- הטבלה מציגה את כל פריטי המזון: קלוריות, חלבון, שומן, פחמימות, סיבים, גודל מנה, סטטוס DBSCAN
+| רכיב | פרטים |
+|------|--------|
+| **LLM** | Groq API — Llama 3.3 70B / 3.1 8B (בחירת המשתמש) |
+| **FSM** | Finite State Machine עם 18 מצבים לאיסוף נתונים סדרתי |
+| **BMR** | נוסחת Mifflin-St Jeor לבוגרים (גיל 16+) |
+| **BMI** | סיווג WHO מבוגרים — תת משקל / תקין / עודף / השמנה |
+| **Clustering** | K-Means K=4 (Silhouette=0.582) + DBSCAN guardrails |
+| **Similarity** | Cosine Similarity תוך-אשכולית להחלפת ארוחות |
+| **DB** | מסד מזון מוטמע 130+ פריטים מ-USDA National Nutrient Database |
+| **UI** | עברית RTL מלאה, dark/light mode, responsive |
 
 ---
 
-## ארכיטקטורה טכנית
+## תכונות
+
+### 💬 שיחה תזונתית
+- איסוף 8 שדות חובה בסדר קפדני עם validation מלא
+- Chips מהירים לכל שאלה (גיל, מין, משקל, גובה, פעילות, אלרגיות, דחיות, הגבלות)
+- זיהוי נטייה מגדרית דינמית (זכר/נקבה) לכל התגובות
+- גילוי קונטרדיקציות לפני יצירת תוכנית (TC-05)
+- דחיית בקשות מחוץ לדומיין בשאלות המשך (TC-06)
+- הגבלות תזונתיות: `ללא גלוטן`, `ללא לקטוז`, `טבעוני`, `צמחוני`, `כשר`
+
+### 📊 תוכנית ארוחות
+- 6 ארוחות יומיות עם שעות מומלצות ופיזור קלורי מחויב
+- ארוחות מותאמות תרבותית ותזמונית (בוקר ≠ צהריים ≠ ערב)
+- תג K-Means לכל ארוחה (אשכול 0–3)
+- כפתור "שנה ארוחה" — Cosine Similarity תוך-אשכולית
+- סריקת DBSCAN -1 אוטומטית + retry עד 3 ניסיונות
+- Q&A ייעודי מוטמע מתחת לתוכנית
+
+### 🧬 K-Means Cluster Explorer
+- לחיצה על כל אשכול (0–3) פותחת טבלה מלאה של כל פריטי המזון
+- עמודות: שם עברי/אנגלי, קלוריות/100g, חלבון, שומן, פחמימות, סיבים, גודל מנה, סטטוס DBSCAN
+
+### 🎨 UI/UX
+- **Dark / Light Mode** — כפתור ☀️/🌙 בטופבר, נשמר ב-localStorage
+- **↺ התחל מחדש** — כפתור בטופבר + לחיצה על הלוגו → modal אישור → איפוס מלא
+- בחירת מודל Groq ב-dropdown (Llama 3.3 70B / 3.1 8B / SpDec)
+- Typing indicator, toast notifications, modal dialogs
+- BMI gauge + metrics sidebar
+- היסטוריית החלפות ארוחות
+- FSM progress indicator
+
+### 🛠️ Developer Tools
+- `nutrilogger.js` — לוגים מוצבעים ב-console: `nutriLogs()` / `nutriLogs('API')` / `nutriLogs('FSM')`
+- `logserver.py` — שרת Python לסטרימינג לוגים לטרמינל בזמן אמת (dev only)
+
+---
+
+## ארכיטקטורה
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                   index-2.html                       │
-│         Shell + RTL Layout + Accessibility           │
-└──────────────────────┬──────────────────────────────┘
-                       │
-        ┌──────────────▼──────────────┐
-        │       chatbot-ui.js         │
-        │   UI Controller & DOM       │
-        │   Toast / Modal / Swap UI   │
-        │   Follow-up Q&A Section     │
-        │   K-Means Cluster Tables    │
-        └──────┬───────────┬──────────┘
-               │           │
-    ┌──────────▼──┐    ┌───▼──────────────────┐
-    │ chatbot.js  │    │   geminiclient.js     │
-    │ FSM Engine  │    │  Gemini 2.5 Flash API │
-    │ BMR/BMI Calc│    │  Prompt Builder       │
-    │ Food DB 130+│    │  DBSCAN Scan          │
-    │ K-Means/DBSCAN   │  Compliance Retry x3  │
-    │ Cosine Sim  │    │  TC-06 off-domain     │
-    └─────────────┘    └──────────────────────┘
-         ↑
-    nutrilogger.js
-    (debug infrastructure)
+┌─────────────────────────────────────────────────────────┐
+│                     index-2.html                         │
+│          RTL Hebrew Shell + Topbar + Layout              │
+└────────────────────────┬────────────────────────────────┘
+                         │
+          ┌──────────────▼──────────────┐
+          │        chatbot-ui.js         │
+          │  DOM · Theme · Restart       │
+          │  Chips · Swap UI · Modals    │
+          │  Follow-up Q&A section       │
+          │  K-Means cluster tables      │
+          └──────┬────────────┬──────────┘
+                 │            │
+      ┌──────────▼──┐    ┌────▼─────────────────┐
+      │ chatbot.js  │    │    groqclient.js       │
+      │ FSM 18 states    │  Groq Llama 3.3/3.1   │
+      │ BMR/BMI calc│    │  OpenAI-compat API     │
+      │ Food DB 130+│    │  JSON enforcement      │
+      │ K-Means/DBSCAN   │  Meal context prompt   │
+      │ Cosine Sim  │    │  DBSCAN scan           │
+      │ Contradiction    │  Compliance retry ×3   │
+      └─────────────┘    └──────────────────────┘
+              ↑
+       nutrilogger.js  ←→  logserver.py (dev)
 ```
 
-### FSM — 18 מצבים סדרתיים
-
+### FSM — 18 מצבים
 ```
-BOOT → AGE → GENDER → WEIGHT → HEIGHT
-  → ACTIVITY → ALLERGIES → DISLIKES → RESTRICTIONS
-  → SUMMARY → [AWAITING_EDIT / EDITING_FIELD]
+BOOT → AGE → GENDER → WEIGHT → HEIGHT → ACTIVITY
+  → ALLERGIES → DISLIKES → RESTRICTIONS → SUMMARY
+  → [AWAITING_EDIT | EDITING_FIELD]
   → GENERATING → MEAL_PLAN → FOLLOWUP
 ```
 
-### Auth & Storage
-- **Google Gemini API** — header `X-goog-api-key` (לא query param)
-- **sessionStorage** — מפתח נמחק עם סגירת הטאב
-- **אין backend** — כל העיבוד client-side
-
 ---
 
-## מבנה הפרויקט
+## מבנה קבצים
 
 ```
 nutriagent/
-├── index-2.html        # שלד האפליקציה המלא (RTL עברית)
-├── style.css           # מערכת עיצוב קלינית-מודרנית RTL (2400+ שורות)
-├── chatbot.js          # מנוע FSM + Food DB + Mifflin-St Jeor + Cosine Sim
-├── geminiclient.js     # Gemini 2.5 Flash API client + prompt engineering
-├── chatbot-ui.js       # UI controller + DOM + modal + swap + cluster tables
-├── nutrilogger.js      # Debug logger (nutriLogs() בקונסול)
+├── index-2.html          # שלד האפליקציה (RTL עברית)
+├── style.css             # עיצוב dark + light theme (~2700 שורות)
+├── chatbot.js            # FSM + Food DB + Mifflin-St Jeor + Cosine Sim
+├── groqclient.js         # Groq API client + prompt engineering
+├── chatbot-ui.js         # UI controller + theme + restart + cluster tables
+├── nutrilogger.js        # Debug logger (relay לטרמינל ב-localhost)
+├── logserver.py          # Dev log server (python3 logserver.py)
 ├── datasets/
-│   ├── 01_food_database_full.xlsx       # USDA raw → cleaned
-│   ├── 02_food_database_chatbot.xlsx    # 130+ פריטי הצ'אטבוט
+│   ├── 01_food_database_full.xlsx
+│   ├── 02_food_database_chatbot.xlsx
 │   ├── 03_kmeans_clustering_results.xlsx
-│   ├── 04_similarity_comparison.xlsx   # Cosine vs Jaccard
+│   ├── 04_similarity_comparison.xlsx
 │   ├── 05_bmi_growth_charts.xlsx
-│   └── 06_test_cases.xlsx              # TC-01 עד TC-06
+│   └── 06_test_cases.xlsx
 ├── docs/
 │   ├── pseudocode.md
-│   └── model_comparison.md             # Gemini Flash vs Pro
-├── tests/
-│   └── test_nutriagent.js
+│   └── model_comparison.md
+├── tests/test_nutriagent.js
 ├── .gitignore
 └── README.md
 ```
@@ -148,151 +148,159 @@ nutriagent/
 
 ## התקנה והרצה
 
-### דרישות מקדימות
-- דפדפן מודרני (Chrome 100+, Firefox 95+, Safari 15+, Edge 100+)
-- מפתח API של Google Gemini (מהדורה חינמית תומכת)
-- חיבור אינטרנט
+### דרישות
+- דפדפן מודרני (Chrome 100+ / Firefox 95+ / Safari 15+)
+- מפתח API של [Groq](https://console.groq.com/keys) (חינם, ללא כרטיס אשראי)
+- Python 3 (לשרת הלוגים בלבד — אופציונלי)
 
-### הרצה מקומית
+### הרצה מהירה
 
 ```bash
-# 1. שיבוט הריפו
 git clone https://github.com/noatieder/nutriagent.git
 cd nutriagent
 
-# 2. פתיחה בדפדפן — ללא צורך בשרת!
+# פתח ישירות בדפדפן (ללא שרת):
 open index-2.html
-# או: גרור את index-2.html לדפדפן
+
+# -- או -- עם שרת לוגים לdebug:
+python3 logserver.py
+# → http://localhost:3131/index-2.html
 ```
 
 ### הגדרת מפתח API
-
-1. גש ל-[Google AI Studio](https://aistudio.google.com/apikey) וצור מפתח
+1. גש ל-[console.groq.com/keys](https://console.groq.com/keys) → צור מפתח חינם
 2. פתח את האפליקציה — יופיע מסך הגדרת מפתח
-3. הזן מפתח Gemini תקין (`AIza...`)
-4. לחץ "הפעל את NutriAgent"
+3. הזן מפתח Groq (`gsk_...`)
+4. לחץ **הפעל את NutriAgent**
 
-> 🔒 המפתח נשמר ב-`sessionStorage` בלבד ונמחק עם סגירת הטאב.  
-> לעולם אינו עובר לשרת כלשהו מלבד שרתי Google.
+> 🔒 המפתח נשמר ב-`sessionStorage` בלבד — נמחק עם סגירת הטאב, לא נשלח לשום שרת מלבד Groq.
 
-### דיבאג
-```javascript
-// בקונסול הדפדפן:
-nutriLogs()           // כל הלוגים
-nutriLogs('API')      // לוגים של API בלבד
-nutriLogs('FSM')      // לוגים של FSM בלבד
+### Debug בטרמינל
+```bash
+# הרץ את שרת הלוגים:
+python3 logserver.py
+
+# בדפדפן, פתח http://localhost:3131/index-2.html
+# כל log מהאפליקציה יופיע בטרמינל בזמן אמת (צבעוני)
+
+# גם ישירות ב-Console:
+nutriLogs()          # כל הלוגים
+nutriLogs('API')     # רק API calls
+nutriLogs('FSM')     # רק FSM transitions
+nutriLogs('ERROR')   # רק שגיאות
 ```
 
 ---
 
 ## זרימת המערכת
 
-### שלב 1 — איסוף נתונים (8 שדות חובה)
-| שדה | ולידציה |
-|-----|---------|
-| גיל | מספר שלם, טווח **18–120** |
-| מין | זכר / נקבה |
-| משקל | ק"ג, 10–200 |
-| גובה | ס"מ, 130–220 |
-| רמת פעילות | נמוכה (+0) / בינונית (+200) / גבוהה (+400 קק"ל) |
-| אלרגיות | רשימה חופשית / אין |
-| דחיות | רשימה חופשית / אין |
-| הגבלות | צמחוני / טבעוני / כשר / ללא גלוטן / ללא לקטוז / אין |
+### שלב 1 — איסוף נתונים (8 שדות, FSM)
 
-### שלב 2 — חישובים פיזיולוגיים (Mifflin-St Jeor)
+| שדה | ולידציה | Chips מוצעים |
+|-----|---------|-------------|
+| גיל | **16–120** | 16, 22, 30, 40, 50, 60 |
+| מין | זכר / נקבה | זכר, נקבה |
+| משקל | 10–200 ק"ג | 55, 65, 75, 85, 95, 110 |
+| גובה | 130–220 ס"מ | 155, 162, 168, 175, 182, 190 |
+| פעילות | נמוכה/בינונית/גבוהה | 3 chips |
+| אלרגיות | רשימה חופשית / אין | אין, חלב, גלוטן, ביצים… |
+| דחיות | רשימה חופשית / אין | אין, בשר אדום, דגים… |
+| הגבלות | `ללא גלוטן`, `ללא לקטוז`, `טבעוני`… | 6 chips |
+
+### שלב 2 — חישוב פיזיולוגי (Mifflin-St Jeor)
 ```
 BMR_זכר   = 10×משקל + 6.25×גובה − 5×גיל + 5
 BMR_נקבה  = 10×משקל + 6.25×גובה − 5×גיל − 161
 יעד_קלורי = (BMR + דלתא_פעילות) × מכפיל_BMI
 ```
 
-| קטגוריית BMI (WHO) | סף | מכפיל קלורי |
-|--------------------|-----|------------|
-| תת משקל (< 18.5) | — | ×1.175 (+17.5%) |
-| משקל תקין (< 25.0) | — | ×1.000 |
-| עודף משקל (< 30.0) | — | ×0.875 (−12.5%) |
-| השמנת יתר (≥ 30.0) | — | ×0.825 (−17.5%) |
+| קטגוריית BMI (WHO) | ערך BMI | מכפיל |
+|--------------------|---------|-------|
+| תת משקל | < 18.5 | ×1.175 |
+| משקל תקין | 18.5–24.9 | ×1.000 |
+| עודף משקל | 25–29.9 | ×0.875 |
+| השמנת יתר | ≥ 30.0 | ×0.825 |
 
-### שלב 3 — יצירת תוכנית (Gemini 2.5 Flash)
-1. בדיקת סתירה לוגית לפני קריאת API (TC-05)
-2. בניית System Prompt קליני עם פרופיל מלא + K-Means schema
-3. קריאת Gemini API עם `responseMimeType: application/json`
-4. סריקת DBSCAN -1 על התגובה
+### שלב 3 — יצירת תוכנית (Groq API)
+1. בדיקת סתירה לוגית (TC-05) — לפני API
+2. בניית System Prompt עם פרופיל מלא + כללי K-Means + **הגיון ארוחות**
+3. קריאה ל-Groq עם `response_format: { type: "json_object" }`
+4. סריקת DBSCAN -1 על התוצאה
 5. ולידציית ציות לאלרגיות/הגבלות
 6. Retry אוטומטי עד 3 ניסיונות עם הנחיות תיקון
 
 ---
 
-## מודלים של Data Science
+## מודלי Data Science
 
-### K-Means — 4 אשכולות מזון (Silhouette=0.582)
+### K-Means — 4 אשכולות (Silhouette=0.582)
 
 | אשכול | צבע | שם | מאפיינים | דוגמאות |
-|-------|-----|-----|---------|---------|
-| 0 | 🔵 Cyan | נפח/הידרציה | קלוריות נמוכות, סיבים גבוהים | עלים ירוקים, פירות טריים, מרקים |
-| 1 | 🟢 Green | חלבון רזה | חלבון גבוה, שומן נמוך | חזה עוף, טונה, קוד, קטניות |
-| 2 | 🟡 Gold | שומנים בריאים | שומן גבוה, אנרגיה צפופה | אבוקדו, אגוזים, טחינה, זרעים |
-| 3 | 🟣 Purple | פחמימות מורכבות | פחמימות גבוהות, סיבים | אורז מלא, קינואה, כוסמין |
+|-------|-----|----|---------|---------|
+| 0 | 🔵 | נפח/הידרציה | קלוריות נמוכות, סיבים | עלים, פירות, מרקים |
+| 1 | 🟢 | חלבון רזה | חלבון גבוה, שומן נמוך | עוף, דגים, קטניות, ביצים |
+| 2 | 🟡 | שומנים בריאים | שומן גבוה, אנרגיה | אגוזים, טחינה, אבוקדו |
+| 3 | 🟣 | פחמימות מורכבות | פחמימות + סיבים | אורז מלא, קינואה, כוסמין |
 
-> 💡 **חדש**: לחיצה על כל שורה בסרגל K-Means שמאלה פותחת טבלה מלאה של כל פריטי האשכול.
+> **K-Means Explorer:** לחיצה על כל שורה בסרגל הצד הימני פותחת טבלה מלאה עם כל פריטי האשכול.
 
-### DBSCAN — זיהוי חריגים
-- **6 פריטים** מסווגים כ-Cluster -1 (3.15% מהבסיס)
-- פריטים חסומים: אבקות חלבון תעשייתיות, שמן דקלים, סירופ גלוקוז, מרגרינה טרנס, מאס גיינר, חלב מרוכז
-- חסימה אוטומטית למשתמשים פרטיים — גלויים בלבד למצב קליני
+### DBSCAN — 6 פריטי חריגים (-1)
+חסומים אוטומטית: אבקות חלבון תעשייתיות, שמן דקלים, סירופ גלוקוז, מרגרינה טרנס, מאס גיינר, חלב מרוכז ממותק.
 
 ### Cosine Similarity — מנוע החלפות
 ```javascript
-// וקטור 6 מימדי לכל פריט מזון (per serving):
+// וקטור 6 מימדי per serving:
 vector = [calories, protein, fat, carbs, fiber, sugar]
-
-// כלל ארכיטקטוני: החלפה תוך-אשכולית בלבד!
-// אשכול 1 → אשכול 1 בלבד (חזה עוף ↔ טונה / פילה קוד / הודו)
-// מניעה מוחלטת של החלפה בין אשכולות שונים
+// כלל ארכיטקטוני: החלפה תוך-אשכולית בלבד
+// אשכול 1 ↔ אשכול 1 בלבד (עוף ↔ דג / קטניות)
 ```
+
+### מודלי Groq (Free Tier)
+
+| מודל | TPM | RPD | מתאים ל |
+|------|-----|-----|---------|
+| `llama-3.3-70b-versatile` ⭐ | 12,000 | 1,000 | JSON מורכב, ברירת מחדל |
+| `llama-3.1-8b-instant` ⚡ | 6,000 | **14,400** | מהירות, כמות גדולה |
+| `llama-3.3-70b-specdec` | 6,000 | 1,000 | מהיר ב-70B |
+
+> Mixtral 8x7b ו-llama3-8192 deprecated (מרץ 2025).
 
 ---
 
 ## מקרי בדיקה
 
-| TC | תיאור | תוצאה צפויה |
-|----|-------|------------|
-| TC-01 | מבוגר בריא | תפריט ~2000 קק"ל |
-| TC-02 | מבוגרת עודף משקל | תפריט מופחת ~1600 קק"ל |
-| TC-03 | מבוגר עם אלרגיות (גלוטן + חלב) | תפריט מותאם ללא גלוטן/לקטוז |
-| TC-04 | מבוגרת טבעונית | תפריט ~2200 קק"ל מהצומח בלבד |
-| TC-05 | **כשל 1**: טבעוני + דחיית כל חלבוני הצומח | FSM מזהה סתירה לוגית → עריכה |
-| TC-06 | **כשל 2**: שאלה מחוץ לדומיין ("המלץ על שיר") | Gemini → `[OFF_DOMAIN]` → הודעת שגיאה |
+| TC | תיאור | גיל | תוצאה צפויה |
+|----|-------|-----|------------|
+| TC-01 | מבוגר בריא | 28 | תפריט ~2000 קק"ל |
+| TC-02 | מבוגרת עודף משקל | 35 | תפריט מופחת ~1600 קק"ל |
+| TC-03 | עם אלרגיות (גלוטן + חלב) | 22 | תפריט ללא גלוטן/לקטוז |
+| TC-04 | טבעונית | 19 | תפריט ~2200 קק"ל צמחי |
+| TC-05 | **כשל:** טבעוני + דחיית כל חלבוני הצומח | 25 | FSM זיהוי סתירה → עריכה |
+| TC-06 | **כשל:** שאלה מחוץ לדומיין ("המלץ על שיר") | — | [OFF_DOMAIN] → הודעת שגיאה |
 
 ---
 
 ## אבטחה ופרטיות
 
-- ✅ מפתח API מאוחסן ב-`sessionStorage` בלבד (נמחק עם סגירת הטאב)
-- ✅ אין שרת backend — כל העיבוד client-side
-- ✅ אין שמירת היסטוריית שיחות
-- ✅ אין cookies או tracking
-- ✅ תקשורת ישירה בלעדית עם Google Gemini API
-- ✅ `X-goog-api-key` header auth — לא query param
-- ⚠️ מומלץ להשתמש במפתח API ייעודי עם הגבלת שימוש ב-Google AI Studio
+| | פרט |
+|--|-----|
+| 🔒 **מפתח API** | `sessionStorage` בלבד — נמחק עם סגירת הטאב |
+| 🖥️ **Backend** | אין — כל העיבוד client-side |
+| 📊 **נתוני משתמש** | לא נשמרים, לא נשלחים לשרת כלשהו |
+| 🍪 **Cookies** | אין |
+| 🔑 **Groq Auth** | `Authorization: Bearer` header — לא query param |
 
 ---
 
-## הצהרת רפואית
+## הצהרה רפואית
 
-> ⚕️ **NutriAgent הוא כלי תמיכה בלבד.**  
-> המערכת אינה מהווה תחליף לייעוץ תזונאי מוסמך, רופא, או איש מקצוע בתחום הבריאות.  
-> ההמלצות מבוססות על נתונים כלליים ואינן מותאמות למצב רפואי ספציפי.  
+> ⚕️ **NutriAgent הוא כלי תמיכה בלבד.**
+> המערכת אינה מהווה תחליף לייעוץ תזונאי מוסמך, רופא, או איש מקצוע רפואי.
+> ההמלצות מבוססות על נתונים כלליים ואינן מותאמות למצב רפואי ספציפי.
 > בכל שאלה רפואית יש לפנות לאיש מקצוע מוסמך.
 
 ---
 
-## רישיון
-
-MIT License — ראה קובץ `LICENSE` לפרטים.
-
----
-
 <div align="center">
-  נועה טידר & גאיה קישון | NutriAgent © 2026 | Gemini 2.5 Flash
+  נועה טידר & גאיה קישון · NutriAgent © 2026 · Powered by Groq Llama 3.3
 </div>

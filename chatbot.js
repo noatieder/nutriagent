@@ -1493,7 +1493,7 @@ class NutriAgentFSM {
 
   /* ----------------------------------------------------------
      13.4 — AGE COLLECTION
-     Strict validation: integer, range [4, 18].
+     Strict validation: integer, range [16, 120].
   ---------------------------------------------------------- */
   _handleAge(input) {
     const age = parseInt(input.replace(/[^\d]/g, ''), 10);
@@ -1504,11 +1504,11 @@ class NutriAgentFSM {
         { type: 'validation' }
       );
     }
-    if (age < 18 || age > 120) {
+    if (age < 16 || age > 120) {
       return this._response(
-        `NutriAgent מיועד למשתמשים בוגרים בגיל **18 ומעלה**.\n` +
+        `NutriAgent מיועד למשתמשים מגיל **16 ומעלה**.\n` +
         `הגיל שהוזן (${age}) אינו בטווח הנתמך.\n` +
-        `אנא הזן גיל בין 18 ל-120.`,
+        `אנא הזן גיל בין 16 ל-120.`,
         { type: 'validation' }
       );
     }
@@ -1918,7 +1918,7 @@ class NutriAgentFSM {
     this._clearProfileField(targetState);
 
     const fieldPrompts = {
-      [FSM_STATES.AGE]:          'מה גילך? (18+)',
+      [FSM_STATES.AGE]:          'מה גילך? (16+)',
       [FSM_STATES.GENDER]:       'מה המין? (זכר / נקבה)',
       [FSM_STATES.WEIGHT]:       'מה המשקל החדש? (בק"ג)',
       [FSM_STATES.HEIGHT]:       'מה הגובה החדש? (בס"מ)',

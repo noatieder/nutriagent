@@ -72,29 +72,13 @@
           <div class="brand-tagline">מערכת תמיכה תזונתית קלינית</div>
         </div>
 
-        <!-- Mode toggle: Dietitian / Private User -->
-        <nav class="topbar__mode-toggle" role="tablist" aria-label="בחירת מצב שימוש">
-          <button
-            class="mode-btn mode-btn--active"
-            id="btn-mode-private"
-            role="tab"
-            aria-selected="true"
-            aria-controls="panel-chat"
-            data-mode="private"
-          >
-            <span class="mode-btn__icon">👤</span>
-            <span class="mode-btn__label">משתמש פרטי</span>
+        <!-- Mode toggle: hidden — private mode only, buttons kept for JS compatibility -->
+        <nav class="topbar__mode-toggle" role="tablist" aria-label="בחירת מצב שימוש" style="display:none" aria-hidden="true">
+          <button class="mode-btn mode-btn--active" id="btn-mode-private" role="tab" aria-selected="true" aria-controls="panel-chat" data-mode="private" tabindex="-1">
+            <span class="mode-btn__icon">👤</span><span class="mode-btn__label">משתמש פרטי</span>
           </button>
-          <button
-            class="mode-btn"
-            id="btn-mode-clinical"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-chat"
-            data-mode="clinical"
-          >
-            <span class="mode-btn__icon">🩺</span>
-            <span class="mode-btn__label">תזונאי קליני</span>
+          <button class="mode-btn" id="btn-mode-clinical" role="tab" aria-selected="false" aria-controls="panel-chat" data-mode="clinical" tabindex="-1">
+            <span class="mode-btn__icon">🩺</span><span class="mode-btn__label">תזונאי קליני</span>
           </button>
         </nav>
 
