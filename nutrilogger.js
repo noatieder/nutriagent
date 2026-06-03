@@ -27,9 +27,29 @@
 
   const entries = [];
 
+  // Relay to local dev server when running on localhost (fire-and-forget)
+  const DEV_LOG_URL = (() => {
+    try {
+      const h = window.location.hostname;
+      return (h === 'localhost' || h === '127.0.0.1') ? 'http://localhost:3131/log' : null;
+    } catch { return null; }
+  })();
+
+  function relayToTerminal(level, source, message, data, timestamp) {
+    if (!DEV_LOG_URL) return;
+    try {
+      fetch(DEV_LOG_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: level.toLowerCase(), module: source, message, data, timestamp }),
+      }).catch(() => {}); // silent fail — server may not be running
+    } catch { /* silent */ }
+  }
+
   function addEntry(level, source, message, data) {
     const entry = {
-      ts:      new Date().toISOString().slice(11, 23),  // HH:MM:SS.mmm
+      ts:        new Date().toISOString().slice(11, 23),  // HH:MM:SS.mmm
+      timestamp: new Date().toISOString(),
       level,
       source,
       message,
@@ -45,6 +65,9 @@
     } else {
       console.log(`%c${prefix} ${message}`, STYLES[level]);
     }
+
+    // Relay to terminal log server (dev only)
+    relayToTerminal(level, source, message, data, entry.timestamp);
   }
 
   const NutriLogger = {
