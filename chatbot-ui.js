@@ -42,6 +42,9 @@ function resolveDOM() {
   DOM.apiStatusDot     = document.getElementById('api-status-dot');
   DOM.apiStatusLabel   = document.getElementById('api-status-label');
   DOM.modelSelector    = document.getElementById('model-selector');
+  DOM.btnThemeToggle   = document.getElementById('btn-theme-toggle');
+  DOM.btnRestart       = document.getElementById('btn-restart');
+  DOM.topbarBrand      = document.querySelector('.topbar__brand');
 
   // Chat
   DOM.chatMessages     = document.getElementById('chat-messages');
@@ -121,11 +124,15 @@ const UIState = {
   swapSourceIds:  {},          // mealSlot → food_item_id for swap engine
 };
 
+// Timer handle for hideQuickChips — must be cancelled before rendering new chips
+let _hideChipsTimer = null;
+
 /* ============================================================
    SECTION 3 — BOOTSTRAP
    Entry point called on DOMContentLoaded.
 ============================================================ */
 function boot() {
+  initTheme();   // apply saved theme before DOM renders
   resolveDOM();
   bindEvents();
 
@@ -193,6 +200,13 @@ function bindEvents() {
   DOM.apiKeyInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') handleAPIKeyConfirm();
   });
+
+  // Theme toggle
+  DOM.btnThemeToggle.addEventListener('click', toggleTheme);
+
+  // Restart — button + logo click
+  DOM.btnRestart.addEventListener('click', () => confirmRestart());
+  DOM.topbarBrand.addEventListener('click', () => confirmRestart());
 
   // K-Means cluster legend — click to view food table
   document.querySelectorAll('.cluster-legend__item[data-cluster]').forEach(el => {
@@ -1243,6 +1257,10 @@ function appendClinicalLog(text) {
  * @param {string[]} chips — array of chip labels
  */
 function renderQuickChips(chips) {
+  // Cancel any pending hide-timer so it doesn't erase the new chips
+  clearTimeout(_hideChipsTimer);
+  _hideChipsTimer = null;
+
   DOM.quickChips.innerHTML = '';
 
   if (!chips || chips.length === 0) {
@@ -1264,7 +1282,8 @@ function renderQuickChips(chips) {
 
 function hideQuickChips() {
   DOM.quickChips.classList.remove('visible');
-  setTimeout(() => { DOM.quickChips.innerHTML = ''; }, 300);
+  clearTimeout(_hideChipsTimer);
+  _hideChipsTimer = setTimeout(() => { DOM.quickChips.innerHTML = ''; }, 300);
 }
 
 /* ============================================================
@@ -1475,7 +1494,126 @@ function delay(ms) {
 }
 
 /* ============================================================
-   SECTION 25 — K-MEANS CLUSTER TABLE MODAL
+   SECTION 25 — THEME TOGGLE (Light / Dark)
+============================================================ */
+
+function initTheme() {
+  const saved = localStorage.getItem('nutriagent-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  _updateThemeButton(saved);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'dark';
+  const next    = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('nutriagent-theme', next);
+  _updateThemeButton(next);
+}
+
+function _updateThemeButton(theme) {
+  if (!DOM.btnThemeToggle) return;
+  DOM.btnThemeToggle.textContent    = theme === 'dark' ? '☀️' : '🌙';
+  DOM.btnThemeToggle.setAttribute('aria-label', theme === 'dark' ? 'עבור למצב בהיר' : 'עבור למצב כהה');
+  DOM.btnThemeToggle.setAttribute('title',      theme === 'dark' ? 'מצב בהיר'        : 'מצב כהה');
+}
+
+/* ============================================================
+   SECTION 25b — SESSION RESTART
+============================================================ */
+
+function confirmRestart() {
+  // Skip confirmation if session hasn't started yet
+  const { fsm } = window.NutriAgent;
+  if (fsm.state === 'age' || fsm.state === 'greeting' || fsm.state === 'boot') {
+    return; // nothing to reset
+  }
+  openModal(
+    '↺ התחל מחדש',
+    `<p style="color:var(--color-text-secondary);line-height:1.6">
+      כל הנתונים שהזנת יימחקו והשיחה תתחיל מחדש.<br/>
+      <strong style="color:var(--color-accent-danger)">פעולה זו אינה ניתנת לביטול.</strong>
+    </p>`,
+    () => resetSession()
+  );
+  DOM.modalConfirm.textContent = '↺ כן, התחל מחדש';
+  DOM.modalConfirm.style.display = 'inline-flex';
+  DOM.modalConfirm.style.background = 'rgba(248,113,113,0.15)';
+  DOM.modalConfirm.style.borderColor = 'rgba(248,113,113,0.3)';
+  DOM.modalConfirm.style.color = 'var(--color-accent-danger)';
+}
+
+function resetSession() {
+  const { fsm } = window.NutriAgent;
+
+  // Reset FSM
+  fsm.reset();
+
+  // Reset UI state
+  UIState.chatHistory     = [];
+  UIState.currentPlanJson = null;
+  UIState.profileFieldsMap = {};
+  UIState.swapSourceIds   = {};
+  UIState.isProcessing    = false;
+
+  // Clear chat messages
+  DOM.chatMessages.innerHTML = '';
+  DOM.chatMessages.style.display = '';
+  DOM.chatMessages.style.order = '';
+  DOM.chatMessages.style.flex = '';
+  DOM.chatMessages.style.maxHeight = '';
+  DOM.chatMessages.style.borderTop = '';
+
+  // Hide meal dashboard
+  DOM.mealDashboard.classList.remove('visible');
+  DOM.mealDashboard.setAttribute('aria-hidden', 'true');
+
+  // Reset follow-up section
+  if (DOM.followupChatSection) {
+    DOM.followupChatSection.classList.remove('visible');
+    DOM.followupChatSection.setAttribute('aria-hidden', 'true');
+  }
+  if (DOM.followupMessages) DOM.followupMessages.innerHTML = '';
+
+  // Clear profile sidebar
+  DOM.profileEmptyState.style.display = '';
+  DOM.profileFields.innerHTML = '';
+  DOM.metricsBlock.setAttribute('aria-hidden', 'true');
+  DOM.bmiGaugeContainer.setAttribute('aria-hidden', 'true');
+  DOM.dietaryTagsSection.setAttribute('aria-hidden', 'true');
+  DOM.dietaryTagsCloud.innerHTML = '';
+  DOM.clinicalAuditSection.setAttribute('aria-hidden', 'true');
+  DOM.clinicalLog.innerHTML = '<p class="clinical-log__empty">היומן יתמלא לאחר יצירת תוכנית הארוחות.</p>';
+  DOM.metricBMIValue.textContent      = '—';
+  DOM.metricBMRValue.textContent      = '—';
+  DOM.metricCaloriesValue.textContent = '—';
+  DOM.metricCategoryValue.textContent = '—';
+  DOM.metricBMIBadge.textContent      = '';
+
+  // Clear swap history
+  DOM.swapHistoryList.innerHTML =
+    '<li class="swap-history-list__empty" id="swap-history-empty">עדיין לא בוצעו החלפות.</li>';
+
+  // Reset input
+  DOM.userInput.value = '';
+  DOM.userInput.placeholder = 'הקלד הודעה בעברית…';
+  DOM.btnSend.disabled = true;
+  updateCharCounter();
+
+  // Misc
+  hideQuickChips();
+  hideTypingIndicator();
+  updateFSMStageIndicator('greeting');
+  updateDBSCANBadge('idle', 'ממתין לסריקה');
+  setAPIStatus('online');
+
+  // Re-boot
+  startSession();
+  showToast('↺ השיחה התחילה מחדש', 'info', 2500);
+}
+
+/* ============================================================
+   SECTION 25c — K-MEANS CLUSTER TABLE MODAL
    Opens a modal with a nutritional table for all foods
    in the selected K-Means cluster (0–3).
 ============================================================ */
@@ -1569,7 +1707,6 @@ function showClusterTable(clusterIdx) {
 
 /* ============================================================
    SECTION 26 — INIT
-   Wait for all modules to load then boot.
 ============================================================ */
 function waitForModules(callback, maxWait = 5000) {
   const start = Date.now();

@@ -1997,14 +1997,18 @@ class NutriAgentFSM {
    * @returns {string[]}
    */
   _parseListInput(input) {
-    const negations = ['אין', 'לא', 'כלום', 'none', 'no', 'nothing', 'לא יודע', 'לא יודעת'];
+    // Exact-match only — prevents 'ללא גלוטן'/'ללא לקטוז' from being swallowed
+    // because they contain 'לא' as a substring.
+    const EXACT_NEGATIONS = new Set([
+      'אין', 'לא', 'כלום', 'none', 'no', 'nothing', 'לא יודע', 'לא יודעת',
+    ]);
     const trimmed = input.trim().toLowerCase();
-    if (negations.some(n => trimmed === n || trimmed.includes(n))) return [];
+    if (EXACT_NEGATIONS.has(trimmed)) return [];
 
     return input
       .split(/[,،،\n]+/)
       .map(s => s.trim())
-      .filter(s => s.length > 0 && !['אין', 'לא', 'לא יודע'].includes(s.toLowerCase()));
+      .filter(s => s.length > 0 && !EXACT_NEGATIONS.has(s.toLowerCase()));
   }
 
   /**
