@@ -478,6 +478,21 @@
             <span class="compliance-badge__text">אומת: אפס פריטי DBSCAN-1 | עמידה מלאה באילוצים התזונתיים</span>
           </div>
 
+          <!-- Follow-up Q&A Section — shown after plan generation -->
+          <div class="followup-chat-section" id="followup-chat-section" aria-hidden="true" aria-label="שאלות ומענה על התוכנית">
+            <div class="followup-chat-section__header">
+              <span aria-hidden="true">💬</span>
+              <span>שאלות על התוכנית</span>
+            </div>
+            <div
+              class="followup-messages"
+              id="followup-messages"
+              role="log"
+              aria-live="polite"
+              aria-relevant="additions"
+            ></div>
+          </div>
+
         </div><!-- /meal-dashboard -->
 
         <!-- --------------------------------------------------------
@@ -554,37 +569,41 @@
               אשכולות מזון (K-Means)
             </h2>
             <div class="cluster-legend">
-              <div class="cluster-legend__item cluster-legend__item--0">
+              <div class="cluster-legend__item cluster-legend__item--0" data-cluster="0" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
                 <div class="cluster-legend__dot"></div>
                 <div class="cluster-legend__info">
                   <strong>אשכול 0</strong>
                   <span>נפח / הידרציה / צפיפות נמוכה</span>
                   <small>עלים ירוקים, פירות טריים, מרקים</small>
                 </div>
+                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
               </div>
-              <div class="cluster-legend__item cluster-legend__item--1">
+              <div class="cluster-legend__item cluster-legend__item--1" data-cluster="1" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
                 <div class="cluster-legend__dot"></div>
                 <div class="cluster-legend__info">
                   <strong>אשכול 1</strong>
                   <span>חלבון רזה</span>
                   <small>חזה עוף, טונה, פילה קוד, חלבוני ביצה</small>
                 </div>
+                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
               </div>
-              <div class="cluster-legend__item cluster-legend__item--2">
+              <div class="cluster-legend__item cluster-legend__item--2" data-cluster="2" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
                 <div class="cluster-legend__dot"></div>
                 <div class="cluster-legend__info">
                   <strong>אשכול 2</strong>
                   <span>שומנים בריאים / אנרגיה צפופה</span>
                   <small>שמן זית, אגוזים, טחינה, אבוקדו</small>
                 </div>
+                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
               </div>
-              <div class="cluster-legend__item cluster-legend__item--3">
+              <div class="cluster-legend__item cluster-legend__item--3" data-cluster="3" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
                 <div class="cluster-legend__dot"></div>
                 <div class="cluster-legend__info">
                   <strong>אשכול 3</strong>
                   <span>פחמימות מורכבות</span>
                   <small>אורז מלא, קינואה, שיבולת שועל, לחם כוסמין</small>
                 </div>
+                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
               </div>
             </div>
           </div>

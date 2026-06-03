@@ -1826,6 +1826,11 @@ class NutriAgentFSM {
   _handleSummary(input) {
     const lc = input.toLowerCase().trim();
 
+    // Re-render summary (called internally after edit flow completes)
+    if (lc === 'סיכום' || lc === 'summary') {
+      return this._buildSummaryResponse(this.profile.restrictions?.join(', ') || 'אין');
+    }
+
     if (lc.includes('המשך') || lc === 'continue') {
       // TC-05: Run contradiction check before generating
       const { contradiction, message } = detectContradiction(this.profile);

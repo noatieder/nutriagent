@@ -712,10 +712,25 @@ code, pre {
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
   transition: all var(--transition-normal);
+  cursor: pointer;
 }
 
 .cluster-legend__item:hover {
-  background: rgba(255,255,255,0.03);
+  background: rgba(255,255,255,0.05);
+  border-color: rgba(255,255,255,0.15);
+  transform: translateX(-2px);
+}
+
+.cluster-legend__expand-hint {
+  margin-right: auto;
+  font-size: 11px;
+  opacity: 0.4;
+  transition: opacity var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.cluster-legend__item:hover .cluster-legend__expand-hint {
+  opacity: 0.8;
 }
 
 .cluster-legend__dot {
@@ -1613,6 +1628,46 @@ code, pre {
   font-family: var(--font-mono);
 }
 
+
+/* ================================================================
+   22b. FOLLOW-UP CHAT SECTION (inside meal dashboard)
+================================================================ */
+.followup-chat-section {
+  display: none;
+  flex-direction: column;
+  gap: var(--space-3);
+  border-top: 1px solid rgba(74,222,128,0.15);
+  padding-top: var(--space-4);
+  margin-top: var(--space-2);
+}
+
+.followup-chat-section[aria-hidden="false"],
+.followup-chat-section.visible {
+  display: flex;
+}
+
+.followup-chat-section__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-accent-primary);
+}
+
+.followup-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: var(--space-1);
+  scroll-behavior: smooth;
+}
+
+.followup-messages .message {
+  animation: fadeInUp 0.25s ease both;
+}
 
 /* ================================================================
    23. SWAP HISTORY

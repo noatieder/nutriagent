@@ -96,6 +96,10 @@ function resolveDOM() {
   // Toast
   DOM.toastContainer = document.getElementById('toast-container');
 
+  // Follow-up Q&A section (inside meal dashboard)
+  DOM.followupChatSection = document.getElementById('followup-chat-section');
+  DOM.followupMessages    = document.getElementById('followup-messages');
+
   // API key overlay
   DOM.apiKeyOverlay  = document.getElementById('api-key-overlay');
   DOM.apiKeyInput    = document.getElementById('api-key-input');
@@ -189,6 +193,17 @@ function bindEvents() {
     if (e.key === 'Enter') handleAPIKeyConfirm();
   });
 
+  // K-Means cluster legend — click to view food table
+  document.querySelectorAll('.cluster-legend__item[data-cluster]').forEach(el => {
+    el.addEventListener('click', () => showClusterTable(parseInt(el.dataset.cluster, 10)));
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        showClusterTable(parseInt(el.dataset.cluster, 10));
+      }
+    });
+  });
+
   // Print button
   DOM.btnPrintPlan.addEventListener('click', () => window.print());
 
@@ -213,6 +228,8 @@ async function startSession() {
   const { fsm } = window.NutriAgent;
   const response = await fsm.process('');
   renderAgentMessage(response.text, response);
+  renderQuickChips(response.quickChips);
+  updateFSMStageIndicator(response.state);
 }
 
 /* ============================================================
@@ -345,12 +362,6 @@ async function handleMealPlanGeneration() {
     // Populate and reveal meal dashboard
     await populateMealDashboard(planJson, profile);
 
-    // Render success message with summary
-    renderAgentMessage(
-      `✅ **תוכנית הארוחות שלך מוכנה!**\n\n${planJson.summary || ''}`,
-      { type: 'success' }
-    );
-
     // Log to clinical audit (visible in clinical mode)
     if (planJson.conversation_summary) {
       appendClinicalLog(planJson.conversation_summary);
@@ -360,10 +371,19 @@ async function handleMealPlanGeneration() {
     fsm.enterFollowupMode();
     updateFSMStageIndicator('followup');
 
-    // Show follow-up prompt
-    await delay(500);
-    renderAgentMessage(
-      '💬 **יש לך שאלות על התוכנית?**\n\nניתן לשאול כל שאלה הקשורה לתוכנית הארוחות שנוצרה עבורך.',
+    // Reveal the follow-up Q&A section inside the dashboard
+    DOM.followupChatSection.classList.add('visible');
+    DOM.followupChatSection.setAttribute('aria-hidden', 'false');
+
+    // Render success & follow-up prompt in the new section
+    await delay(400);
+    renderFollowupMessage(
+      `✅ **תוכנית הארוחות שלך מוכנה!**\n\n${planJson.summary || ''}`,
+      { type: 'success' }
+    );
+    await delay(400);
+    renderFollowupMessage(
+      '💬 **יש לך שאלות על התוכנית?**\n\nשאל כל שאלה הקשורה לתוכנית הארוחות שנוצרה עבורך.',
       { type: 'info' }
     );
 
@@ -413,6 +433,16 @@ async function handleFollowupQuery(text) {
   const { fsm } = window.NutriAgent;
   const { sendFollowupMessage } = window.NutriAgentAPI;
 
+  // Render the user's question in the follow-up section
+  const userMsgEl = document.createElement('div');
+  userMsgEl.className = 'message message--user';
+  userMsgEl.innerHTML =
+    `<div class="message__avatar" aria-hidden="true">👤</div>` +
+    `<div><div class="message__bubble">${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</div>` +
+    `<div class="message__time">${currentTimeHebrew()}</div></div>`;
+  DOM.followupMessages.appendChild(userMsgEl);
+  requestAnimationFrame(() => { DOM.followupMessages.scrollTop = DOM.followupMessages.scrollHeight; });
+
   showTypingIndicator();
 
   const result = await sendFollowupMessage(
@@ -427,13 +457,13 @@ async function handleFollowupQuery(text) {
   if (result.success) {
     // TC-06: off-domain request — show styled error bubble
     const msgType = result.isOffDomain ? 'off-domain-error' : 'followup';
-    renderAgentMessage(result.reply, { type: msgType });
+    renderFollowupMessage(result.reply, { type: msgType });
     if (!result.isOffDomain) {
       UIState.chatHistory.push({ question: text, answer: result.reply });
       if (UIState.chatHistory.length > 8) UIState.chatHistory.shift();
     }
   } else {
-    renderAgentMessage(result.reply || 'שגיאה בעיבוד השאלה.', { type: 'error' });
+    renderFollowupMessage(result.reply || 'שגיאה בעיבוד השאלה.', { type: 'error' });
   }
 }
 
@@ -486,6 +516,49 @@ function renderAgentMessage(text, meta = {}) {
   scrollToBottom();
 
   return msgEl;
+}
+
+/**
+ * Renders a message into the follow-up Q&A section inside the meal dashboard.
+ * Used for all messages after the plan is generated (success, info, followup replies).
+ * @param {string} text
+ * @param {object} meta
+ */
+function renderFollowupMessage(text, meta = {}) {
+  if (!text) return;
+
+  const isError   = meta.type === 'error' || meta.type === 'off-domain-error';
+  const isWarning = meta.type === 'warning';
+
+  const msgEl = document.createElement('div');
+  msgEl.className = `message message--agent${isWarning ? ' message--warning' : ''}${isError ? ' message--error' : ''}`;
+
+  const avatar = document.createElement('div');
+  avatar.className = 'message__avatar';
+  avatar.setAttribute('aria-hidden', 'true');
+  avatar.textContent = '🌿';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'message__bubble';
+  bubble.innerHTML = formatMessageText(text);
+
+  const time = document.createElement('div');
+  time.className = 'message__time';
+  time.textContent = currentTimeHebrew();
+
+  const wrapper = document.createElement('div');
+  wrapper.appendChild(bubble);
+  wrapper.appendChild(time);
+
+  msgEl.appendChild(avatar);
+  msgEl.appendChild(wrapper);
+
+  DOM.followupMessages.appendChild(msgEl);
+
+  // Scroll the follow-up section to latest message
+  requestAnimationFrame(() => {
+    DOM.followupMessages.scrollTop = DOM.followupMessages.scrollHeight;
+  });
 }
 
 /**
@@ -1283,9 +1356,9 @@ async function handleAPIKeyConfirm() {
 
   const { APIKeyManager, validateAPIKey } = window.NutriAgentAPI;
 
-  // Validate format
+  // Validate format (Gemini keys are >20 chars, typically start with AIza)
   if (!APIKeyManager.validate(key)) {
-    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. המפתח חייב להתחיל ב-sk-';
+    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. מפתח Gemini API חייב להיות ארוך מ-20 תווים (לדוגמה: AIza...).';
     return;
   }
 
@@ -1393,7 +1466,100 @@ function delay(ms) {
 }
 
 /* ============================================================
-   SECTION 25 — INIT
+   SECTION 25 — K-MEANS CLUSTER TABLE MODAL
+   Opens a modal with a nutritional table for all foods
+   in the selected K-Means cluster (0–3).
+============================================================ */
+
+/**
+ * Opens a modal showing all foods in a given K-Means cluster.
+ * @param {number} clusterIdx — 0, 1, 2, or 3
+ */
+function showClusterTable(clusterIdx) {
+  const { FOOD_DATABASE, KMEANS_CLUSTERS } = window.NutriAgent;
+  const cluster = KMEANS_CLUSTERS[clusterIdx];
+  if (!cluster) return;
+
+  const foods = FOOD_DATABASE.filter(f => f.cluster === clusterIdx);
+  const validFoods   = foods.filter(f => f.dbscan >= 0);
+  const outlierFoods = foods.filter(f => f.dbscan < 0);
+
+  const clusterColors = {
+    0: { color: '#22d3ee', bg: 'rgba(34,211,238,0.08)', border: 'rgba(34,211,238,0.2)' },
+    1: { color: '#4ade80', bg: 'rgba(74,222,128,0.08)', border: 'rgba(74,222,128,0.2)' },
+    2: { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)' },
+    3: { color: '#c084fc', bg: 'rgba(192,132,252,0.08)', border: 'rgba(192,132,252,0.2)' },
+  };
+  const c = clusterColors[clusterIdx];
+
+  function buildRows(items) {
+    return items.map(item => {
+      const servingCal = Math.round((item.per100g.calories * item.servingSizeG) / 100);
+      const dbscanBadge = item.dbscan < 0
+        ? `<span style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);border-radius:9999px;padding:1px 7px;font-size:10px;font-family:monospace">⛔ DBSCAN -1</span>`
+        : `<span style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2);border-radius:9999px;padding:1px 7px;font-size:10px;font-family:monospace">✓ תקין</span>`;
+      return `
+        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s"
+            onmouseover="this.style.background='rgba(255,255,255,0.03)'"
+            onmouseout="this.style.background=''">
+          <td style="padding:8px 10px;color:#e8f0fe;font-weight:500">${item.name}</td>
+          <td style="padding:8px 10px;color:#8ba3c7;font-size:12px">${item.nameEn}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px">${item.per100g.calories}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#4ade80">${item.per100g.protein}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#fbbf24">${item.per100g.fat}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#c084fc">${item.per100g.carbs}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#8ba3c7">${item.per100g.fiber}</td>
+          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px">${item.servingSizeG}g <span style="color:#8ba3c7;font-size:10px">(${servingCal} קק"ל)</span></td>
+          <td style="padding:8px 10px;text-align:center">${dbscanBadge}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  const headerStyle = `padding:7px 10px;font-size:11px;font-weight:700;color:#8ba3c7;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap`;
+  const headerStyleRight = `padding:7px 10px;font-size:11px;font-weight:700;color:#8ba3c7;text-align:right;border-bottom:1px solid rgba(255,255,255,0.08)`;
+
+  const tableHTML = `
+    <div style="margin-bottom:12px;padding:10px 14px;background:${c.bg};border:1px solid ${c.border};border-radius:10px">
+      <div style="font-size:13px;font-weight:700;color:${c.color}">${cluster.name}</div>
+      <div style="font-size:11px;color:#8ba3c7;margin-top:2px">${cluster.description}</div>
+      <div style="font-size:11px;color:#4a6080;margin-top:4px">
+        ${validFoods.length} פריטים תקינים · ${outlierFoods.length} חריגי DBSCAN -1
+      </div>
+    </div>
+    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;direction:rtl">
+        <thead style="position:sticky;top:0;background:#0d1525;z-index:1">
+          <tr>
+            <th style="${headerStyleRight}">שם עברי</th>
+            <th style="${headerStyleRight}">English</th>
+            <th style="${headerStyle}">קל׳/100g</th>
+            <th style="${headerStyle}">חלבון</th>
+            <th style="${headerStyle}">שומן</th>
+            <th style="${headerStyle}">פחמ׳</th>
+            <th style="${headerStyle}">סיבים</th>
+            <th style="${headerStyle}">מנה (קל׳)</th>
+            <th style="${headerStyle}">DBSCAN</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${buildRows(validFoods)}
+          ${outlierFoods.length > 0 ? `
+            <tr>
+              <td colspan="9" style="padding:8px 10px;font-size:11px;color:#f87171;font-weight:600;background:rgba(248,113,113,0.05);border-top:1px dashed rgba(248,113,113,0.2)">
+                ⛔ פריטי DBSCAN -1 — חסומים לפרופיל פרטי, גלויים בלבד למצב קליני
+              </td>
+            </tr>
+            ${buildRows(outlierFoods)}
+          ` : ''}
+        </tbody>
+      </table>
+    </div>`;
+
+  openModal(`🧬 אשכול ${clusterIdx} — ${cluster.nameShort}`, tableHTML);
+}
+
+/* ============================================================
+   SECTION 26 — INIT
    Wait for all modules to load then boot.
 ============================================================ */
 function waitForModules(callback, maxWait = 5000) {
