@@ -125,7 +125,7 @@ if __name__ == "__main__":
     print(f"\n{B}{GREEN}{'━'*52}{R}")
     print(f"{B}{GREEN}  🌿 NutriAgent Dev Log Server{R}")
     print(f"{B}{GREEN}{'━'*52}{R}")
-    print(f"  {WHITE}App:   {CYAN}http://localhost:{PORT}/index-2.html{R}")
+    print(f"  {WHITE}App:   {CYAN}http://localhost:{PORT}/index.html{R}")
     print(f"  {WHITE}Logs:  POST http://localhost:{PORT}/log{R}")
     print(f"  {WHITE}Stop:  Ctrl+C{R}")
     print(f"{D}{'─'*52}{R}\n")
