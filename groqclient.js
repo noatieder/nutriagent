@@ -1,88 +1,106 @@
 /**
  * ============================================================
- * NUTRIAGENT — geminiclient.js
- * Google Gemini API Client & Prompt Engineering Engine
+ * NUTRIAGENT — groqclient.js
+ * Groq API Client & Prompt Engineering Engine
+ *
+ * Provider:  Groq Cloud (groq.com)
+ * Endpoint:  https://api.groq.com/openai/v1/chat/completions
+ * Format:    OpenAI-compatible chat completions
+ * Auth:      Authorization: Bearer gsk_...
+ * Storage:   sessionStorage['GROQ_API_KEY'] (cleared on tab close)
  *
  * Responsibilities:
- *  - API key management (sessionStorage, never transmitted elsewhere)
- *  - Core sendGeminiRequest() with X-goog-api-key header auth
+ *  - API key management (sessionStorage)
+ *  - Core sendGroqRequest(systemPrompt, history, model, isJson)
  *  - Prompt compilation from FSM profile data
- *  - Strict JSON schema enforcement via responseMimeType + generationConfig
+ *  - JSON enforcement via response_format + explicit prompt
  *  - Post-generation DBSCAN -1 content scan
- *  - Dietary compliance validation + automatic retry on violation
- *  - Follow-up contextual chat (scoped to generated plan)
- *  - Off-domain request detection via [OFF_DOMAIN] marker (TC-06)
- *  - Hebrew gender morphology in all system prompts
+ *  - Dietary compliance validation + automatic retry
+ *  - Follow-up contextual chat (TC-06 off-domain detection)
+ *  - 429 rate-limit handling with Retry-After header
  *
- * Model: gemini-flash-latest
- * Auth:  X-goog-api-key header (per Google AI REST spec)
+ * Models (free tier):
+ *  llama-3.3-70b-versatile  — best JSON/instruction, 12K TPM
+ *  llama-3.1-8b-instant     — fastest, 14,400 RPD
+ *  llama-3.3-70b-specdec    — speculative decoding variant
  * ============================================================
  */
 
 'use strict';
 
 /* ============================================================
-   SECTION 1 — CONFIGURATION CONSTANTS
+   SECTION 1 — CONFIGURATION
 ============================================================ */
 
-const GEMINI_CONFIG = Object.freeze({
-  model:        'gemini-2.5-flash',
-  baseUrl:      'https://generativelanguage.googleapis.com/v1beta/models',
-  maxTokens:    65536,
-  temperature:  0.4,          // Low variance for clinical consistency
-  maxRetries:   3,             // Max compliance retry attempts
-  retryDelayMs: 800,           // Delay between retry attempts
-  storageKey:   'GEMINI_API_KEY',  // sessionStorage key (cleared on tab close)
+const GROQ_MODELS = Object.freeze([
+  {
+    id:          'llama-3.3-70b-versatile',
+    label:       'Llama 3.3 70B ⭐',
+    description: 'מומלץ — הטוב ביותר ל-JSON ולהוראות מורכבות',
+    tpm:         12000,
+    rpd:         1000,
+  },
+  {
+    id:          'llama-3.1-8b-instant',
+    label:       'Llama 3.1 8B ⚡',
+    description: 'הכי מהיר — 14,400 בקשות ביום',
+    tpm:         6000,
+    rpd:         14400,
+  },
+  {
+    id:          'llama-3.3-70b-specdec',
+    label:       'Llama 3.3 70B SpDec',
+    description: 'Speculative Decoding — מהיר ביחס לגודלו',
+    tpm:         6000,
+    rpd:         1000,
+  },
+]);
+
+const GROQ_CONFIG = Object.freeze({
+  defaultModel: 'llama-3.3-70b-versatile',
+  baseUrl:      'https://api.groq.com/openai/v1/chat/completions',
+  temperature:  0.4,
+  maxRetries:   3,
+  retryDelayMs: 800,
+  storageKey:   'GROQ_API_KEY',
 });
 
 /* ============================================================
    SECTION 2 — API KEY MANAGEMENT
-   Key stored only in sessionStorage (cleared when tab closes).
-   Never logged, never sent anywhere except via X-goog-api-key header.
+   Key stored only in sessionStorage (cleared on tab close).
+   Groq keys start with "gsk_" and are 56 characters.
 ============================================================ */
 
 const APIKeyManager = Object.freeze({
 
   get() {
-    try {
-      return sessionStorage.getItem(GEMINI_CONFIG.storageKey) || null;
-    } catch {
-      return null;
-    }
+    try { return sessionStorage.getItem(GROQ_CONFIG.storageKey) || null; }
+    catch { return null; }
   },
 
-  /**
-   * Gemini keys are long alphanumeric strings (no fixed prefix).
-   * Accept any key longer than 20 characters.
-   */
   validate(key) {
     if (!key || typeof key !== 'string') return false;
-    return key.trim().length > 20;
+    const t = key.trim();
+    return t.length > 20;            // gsk_ keys are 56 chars; >20 is a safe minimum
   },
 
   save(key) {
     if (!this.validate(key)) return false;
-    try {
-      sessionStorage.setItem(GEMINI_CONFIG.storageKey, key.trim());
-      return true;
-    } catch {
-      return false;
-    }
+    try { sessionStorage.setItem(GROQ_CONFIG.storageKey, key.trim()); return true; }
+    catch { return false; }
   },
 
   clear() {
-    try {
-      sessionStorage.removeItem(GEMINI_CONFIG.storageKey);
-    } catch { /* silent */ }
+    try { sessionStorage.removeItem(GROQ_CONFIG.storageKey); } catch { /* silent */ }
   },
 
-  isSet() {
-    return this.validate(this.get());
-  },
+  isSet() { return this.validate(this.get()); },
 });
 
 /* ============================================================
    SECTION 3 — SYSTEM PROMPT BUILDER
+   IMPORTANT: Groq requires the word "JSON" to appear in the
+   system prompt when using response_format: {type:"json_object"}.
 ============================================================ */
 
 function buildSystemPrompt(profile) {
@@ -94,8 +112,8 @@ function buildSystemPrompt(profile) {
   const dislikesStr     = profile.dislikes?.length     > 0 ? profile.dislikes.join(', ')     : 'אין';
   const restrictionsStr = profile.restrictions?.length > 0 ? profile.restrictions.join(', ') : 'אין';
 
-  const activityLabel = profile.activityLevel === 'high'     ? 'גבוהה'
-                      : profile.activityLevel === 'moderate'  ? 'בינונית'
+  const activityLabel = profile.activityLevel === 'high'    ? 'גבוהה'
+                      : profile.activityLevel === 'moderate' ? 'בינונית'
                       : 'נמוכה';
 
   return `אתה NutriAgent — מערכת בינה מלאכותית קלינית לתמיכה תזונתית למשתמשים בוגרים ודיאטניות קליניות.
@@ -135,23 +153,15 @@ ${profile.caloricNarrative || `יעד: ${profile.caloricTarget} קק"ל/יום`}
 
 ## כללי ציות לאלרגיות והגבלות — קריטי
 ${profile.restrictions?.some(r => r.includes('גלוטן') || r.toLowerCase().includes('gluten'))
-  ? '⛔ ללא גלוטן: אסור לחלוטין — לחם, פיתה, חיטה, שיבולת שועל, פסטה, בורגול, קוסקוס, עוגות.'
-  : ''}
+  ? '⛔ ללא גלוטן: אסור לחלוטין — לחם, פיתה, חיטה, שיבולת שועל, פסטה, בורגול, קוסקוס, עוגות.' : ''}
 ${profile.restrictions?.some(r => r.includes('לקטוז') || r.toLowerCase().includes('lactose'))
-  ? '⛔ ללא לקטוז: אסור לחלוטין — חלב, גבינה, יוגורט, שמנת, חמאה, גלידה.'
-  : ''}
+  ? '⛔ ללא לקטוז: אסור לחלוטין — חלב, גבינה, יוגורט, שמנת, חמאה, גלידה.' : ''}
 ${profile.restrictions?.some(r => r.includes('טבעוני') || r.toLowerCase().includes('vegan'))
-  ? '⛔ טבעוני: ללא כל מוצר מן החי — ללא בשר, דגים, ביצים, חלב, דבש.'
-  : ''}
+  ? '⛔ טבעוני: ללא כל מוצר מן החי — ללא בשר, דגים, ביצים, חלב, דבש.' : ''}
 ${profile.restrictions?.some(r => r.includes('צמחוני') || r.toLowerCase().includes('vegetarian'))
-  ? '⛔ צמחוני: ללא בשר ודגים. מוצרי חלב וביצים מותרים.'
-  : ''}
-${profile.allergies?.length > 0
-  ? `⛔ אלרגיות: ${allergiesStr} — אסורים לחלוטין בכל ארוחה.`
-  : ''}
-${profile.dislikes?.length > 0
-  ? `⚠️ דחיות: ${dislikesStr} — אל תכלול מאכלים אלו.`
-  : ''}
+  ? '⛔ צמחוני: ללא בשר ודגים. מוצרי חלב וביצים מותרים.' : ''}
+${profile.allergies?.length > 0 ? `⛔ אלרגיות: ${allergiesStr} — אסורים לחלוטין בכל ארוחה.` : ''}
+${profile.dislikes?.length > 0 ? `⚠️ דחיות: ${dislikesStr} — אל תכלול מאכלים אלו.` : ''}
 
 ## כללי שפה — קריטי
 - תקשר אך ורק בעברית תקנית ומקצועית.
@@ -168,9 +178,10 @@ ${profile.dislikes?.length > 0
 - ארוחת ערב: ~20% (${Math.round(profile.caloricTarget * 0.20)} קק"ל)
 - חטיף לילה: ~5% (${Math.round(profile.caloricTarget * 0.05)} קק"ל)
 
-## פורמט תגובה — JSON בלבד
-ענה תמיד ב-JSON תקני בלבד. ללא טקסט לפני או אחרי ה-JSON.
-הסכמה הנדרשת מוגדרת בהודעת המשתמש.`;
+## פורמט תגובה — JSON בלבד (חובה)
+ענה תמיד ב-JSON תקני בלבד, ללא טקסט לפני או אחרי.
+הסכמה הנדרשת מוגדרת בהודעת המשתמש.
+חשוב: התגובה חייבת להיות אובייקט JSON תקני בלבד.`;
 }
 
 /* ============================================================
@@ -179,7 +190,6 @@ ${profile.dislikes?.length > 0
 
 function buildUserPrompt(profile, retryCount = 0, retryViolations = []) {
   let retryHeader = '';
-
   if (retryCount > 0 && retryViolations.length > 0) {
     retryHeader = [
       `⚠️ ניסיון ${retryCount}: התגובה הקודמת נדחתה בשל הפרות ציות:`,
@@ -246,9 +256,7 @@ function buildUserPrompt(profile, retryCount = 0, retryViolations = []) {
 }
 
 /* ============================================================
-   SECTION 5 — FOLLOW-UP SYSTEM PROMPT
-   Off-domain requests must return a marked error string so the
-   UI can display a styled error bubble (TC-06 failure scenario).
+   SECTION 5 — FOLLOW-UP SYSTEM PROMPT (TC-06 off-domain)
 ============================================================ */
 
 function buildFollowupSystemPrompt(profile, planJson) {
@@ -277,48 +285,44 @@ ${mealSummary}
 }
 
 /* ============================================================
-   SECTION 6 — CORE API FUNCTION: sendGeminiRequest
-   Uses the Gemini REST endpoint with X-goog-api-key header auth.
-   - systemPrompt  → system_instruction block
-   - conversationHistory → contents array (role: user/model)
-   - isJsonOutput  → enables responseMimeType: application/json
+   SECTION 6 — CORE API FUNCTION: sendGroqRequest
+   OpenAI-compatible endpoint with JSON enforcement.
    Returns: parsed JS object (isJsonOutput=true) or raw string (false).
-   Throws on API error, network failure, or JSON parse failure.
+   Throws on API error, quota, network failure, or JSON parse failure.
 ============================================================ */
 
-async function sendGeminiRequest(systemPrompt, conversationHistory, isJsonOutput = true) {
+async function sendGroqRequest(systemPrompt, conversationHistory, selectedModel, isJsonOutput = true) {
   const apiKey = APIKeyManager.get();
   if (!apiKey) throw new Error('API_KEY_MISSING');
 
-  const url = `${GEMINI_CONFIG.baseUrl}/${GEMINI_CONFIG.model}:generateContent`;
+  const model = selectedModel || GROQ_CONFIG.defaultModel;
 
-  // Map conversationHistory [{role, content}] → Gemini contents format
-  const contents = (conversationHistory || []).map(m => ({
-    role:  m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }],
-  }));
+  // Build messages array (OpenAI format)
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...(conversationHistory || []).map(m => ({
+      role:    m.role === 'assistant' ? 'assistant' : 'user',
+      content: m.content,
+    })),
+  ];
 
   const body = {
-    system_instruction: {
-      parts: [{ text: systemPrompt }],
-    },
-    contents,
-    generationConfig: {
-      temperature: GEMINI_CONFIG.temperature,
-      ...(isJsonOutput ? { responseMimeType: 'application/json' } : {}),
-    },
+    model,
+    messages,
+    temperature: GROQ_CONFIG.temperature,
+    ...(isJsonOutput ? { response_format: { type: 'json_object' } } : {}),
   };
 
   const L = window.NutriLogger;
-  L?.info('API', `→ POST ${GEMINI_CONFIG.model}`, { isJsonOutput, messageCount: (conversationHistory||[]).length });
+  L?.info('API', `→ POST Groq ${model}`, { isJsonOutput, messages: messages.length });
 
   let response;
   try {
-    response = await fetch(url, {
+    response = await fetch(GROQ_CONFIG.baseUrl, {
       method:  'POST',
       headers: {
-        'Content-Type':   'application/json',
-        'X-goog-api-key': apiKey,
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
     });
@@ -334,50 +338,50 @@ async function sendGeminiRequest(systemPrompt, conversationHistory, isJsonOutput
     try {
       const errBody = await response.json();
       errorMsg = errBody?.error?.message || errorMsg;
-      L?.error('API', `API error body`, errBody);
-    } catch { /* ignore parse error on error body */ }
+      L?.error('API', 'API error body', errBody);
+    } catch { /* ignore */ }
 
-    // 429 — extract retry-after seconds and surface as a distinct error type
+    // 429 — check Retry-After header, then parse message
     if (response.status === 429) {
-      const retryMatch = errorMsg.match(/retry in ([\d.]+)s/i);
-      const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
-      throw new Error(`QUOTA_EXCEEDED:${retrySeconds}`);
+      const retryHeader = response.headers.get('Retry-After') || response.headers.get('retry-after') || '60';
+      const retryMatch  = errorMsg.match(/try again in ([\d.]+)s/i) ||
+                          errorMsg.match(/retry.{0,10}([\d.]+)\s*s/i);
+      const seconds = retryMatch
+        ? Math.ceil(parseFloat(retryMatch[1]))
+        : Math.ceil(parseFloat(retryHeader)) || 60;
+      throw new Error(`QUOTA_EXCEEDED:${seconds}`);
     }
 
     throw new Error(`API_ERROR: ${errorMsg}`);
   }
 
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const data    = await response.json();
+  const rawText = data?.choices?.[0]?.message?.content || '';
+  const finishReason = data?.choices?.[0]?.finish_reason || '';
 
-  L?.debug('API', `Raw response length: ${rawText.length} chars | first 500:`, rawText.slice(0, 500));
-  L?.debug('API', `Full candidates structure`, data?.candidates?.[0]);
+  L?.debug('API', `Response length: ${rawText.length} chars | finish_reason: ${finishReason} | first 400:`, rawText.slice(0, 400));
 
-  if (!isJsonOutput) {
-    return rawText;
-  }
+  if (!isJsonOutput) return rawText;
 
-  // JSON mode: parse and return the object directly
+  // JSON mode: parse and return
   try {
-    // Strip markdown fences if Gemini wraps output despite responseMimeType
     let clean = rawText.trim()
       .replace(/^```json\s*/i, '')
       .replace(/^```\s*/,      '')
       .replace(/\s*```$/,      '');
-    const jsonMatch = clean.match(/\{[\s\S]*\}/);
-    if (jsonMatch) clean = jsonMatch[0];
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (match) clean = match[0];
     const parsed = JSON.parse(clean);
     L?.info('API', 'JSON parsed OK', { keys: Object.keys(parsed) });
     return parsed;
   } catch (parseErr) {
-    L?.error('API', `JSON parse failed`, { error: parseErr.message, raw: rawText.slice(0, 500) });
+    L?.error('API', 'JSON parse failed', { error: parseErr.message, raw: rawText.slice(0, 400) });
     throw new Error(`JSON_PARSE_FAILED: ${parseErr.message} | raw: ${rawText.slice(0, 120)}`);
   }
 }
 
 /* ============================================================
    SECTION 7 — JSON STRUCTURE VALIDATION
-   (operates on already-parsed JS objects from sendGeminiRequest)
 ============================================================ */
 
 function validateMealPlanStructure(json) {
@@ -394,10 +398,8 @@ function validateMealPlanStructure(json) {
       if (!(meal in json.meal_plan)) {
         missingFields.push(`meal_plan.${meal}`);
       } else {
-        for (const mealField of mealFields) {
-          if (!(mealField in json.meal_plan[meal])) {
-            missingFields.push(`meal_plan.${meal}.${mealField}`);
-          }
+        for (const mf of mealFields) {
+          if (!(mf in json.meal_plan[meal])) missingFields.push(`meal_plan.${meal}.${mf}`);
         }
       }
     }
@@ -418,23 +420,21 @@ const DBSCAN_OUTLIER_TERMS = [
 
 function scanForDBSCANOutliers(jsonText) {
   const lc    = jsonText.toLowerCase();
-  const found = DBSCAN_OUTLIER_TERMS.filter(term => lc.includes(term.toLowerCase()));
+  const found = DBSCAN_OUTLIER_TERMS.filter(t => lc.includes(t.toLowerCase()));
   return { detected: found.length > 0, terms: found };
 }
 
 /* ============================================================
    SECTION 9 — MEAL PLAN GENERATION PIPELINE
-   Calls sendGeminiRequest with isJsonOutput=true — receives a
-   parsed JS object directly (no extractJSON step needed).
 ============================================================ */
 
-async function generateMealPlan(profile, onProgress = () => {}) {
+async function generateMealPlan(profile, selectedModel, onProgress = () => {}) {
   let retryCount     = 0;
   let lastViolations = [];
 
   const { validateMealPlanCompliance } = window.NutriAgent;
 
-  while (retryCount <= GEMINI_CONFIG.maxRetries) {
+  while (retryCount <= GROQ_CONFIG.maxRetries) {
 
     onProgress('building', `🧬 בונה פרומפט קליני${retryCount > 0 ? ` (ניסיון ${retryCount + 1})` : ''}…`);
 
@@ -442,53 +442,51 @@ async function generateMealPlan(profile, onProgress = () => {}) {
     const userPrompt   = buildUserPrompt(profile, retryCount, lastViolations);
     const messages     = [{ role: 'user', content: userPrompt }];
 
-    onProgress('calling', '🤖 שולח בקשה ל-Gemini Flash…');
+    const modelLabel = selectedModel || GROQ_CONFIG.defaultModel;
+    onProgress('calling', `🤖 שולח בקשה ל-Groq (${modelLabel})…`);
 
     let planJson;
     try {
-      // isJsonOutput=true → sendGeminiRequest returns parsed object directly
-      planJson = await sendGeminiRequest(systemPrompt, messages, true);
+      planJson = await sendGroqRequest(systemPrompt, messages, selectedModel, true);
     } catch (err) {
       if (err.message === 'API_KEY_MISSING') {
-        return { success: false, error: 'API_KEY_MISSING', message: 'מפתח Gemini API חסר. אנא הגדר מפתח תקין בהגדרות.' };
+        return { success: false, error: 'API_KEY_MISSING', message: 'מפתח Groq API חסר. אנא הגדר מפתח תקין.' };
       }
-      // 429 Quota — never retry, surface the wait time immediately
       if (err.message.startsWith('QUOTA_EXCEEDED')) {
         const seconds = parseInt(err.message.split(':')[1], 10) || 60;
         return {
           success: false,
-          error:   'QUOTA_EXCEEDED',
+          error: 'QUOTA_EXCEEDED',
           retryAfterSeconds: seconds,
-          message: `⏳ חריגה ממגבלת קצב Gemini API.\nאנא המתן **${seconds} שניות** ונסה שוב.`,
+          message: `⏳ חריגה ממגבלת קצב Groq API.\nאנא המתן **${seconds} שניות** ונסה שוב.`,
         };
       }
       if (err.message.startsWith('JSON_PARSE_FAILED')) {
-        if (retryCount < GEMINI_CONFIG.maxRetries) {
+        if (retryCount < GROQ_CONFIG.maxRetries) {
           onProgress('retry', '⚠️ תגובה לא תקינה. מנסה שוב…');
-          await delay(GEMINI_CONFIG.retryDelayMs);
+          await delay(GROQ_CONFIG.retryDelayMs);
           retryCount++;
           continue;
         }
         return { success: false, error: 'JSON_PARSE_ERROR', message: 'המערכת לא הצליחה לפענח את תגובת ה-AI. אנא נסה שוב.' };
       }
-      // Network / API error
-      if (retryCount < GEMINI_CONFIG.maxRetries) {
-        onProgress('retry', `⚠️ שגיאת רשת. מנסה שוב בעוד ${GEMINI_CONFIG.retryDelayMs / 1000} שניות…`);
-        await delay(GEMINI_CONFIG.retryDelayMs);
+      if (retryCount < GROQ_CONFIG.maxRetries) {
+        onProgress('retry', `⚠️ שגיאת רשת. מנסה שוב…`);
+        await delay(GROQ_CONFIG.retryDelayMs);
         retryCount++;
         continue;
       }
-      return { success: false, error: 'NETWORK_ERROR', message: `שגיאת רשת: ${err.message}. אנא בדוק את החיבור לאינטרנט.` };
+      return { success: false, error: 'NETWORK_ERROR', message: `שגיאת רשת: ${err.message}.` };
     }
 
     onProgress('validating', '🔍 מאמת מבנה תוכנית…');
 
     const { valid: structureValid, missingFields } = validateMealPlanStructure(planJson);
     if (!structureValid) {
-      if (retryCount < GEMINI_CONFIG.maxRetries) {
+      if (retryCount < GROQ_CONFIG.maxRetries) {
         lastViolations = missingFields.map(f => `שדה חסר: ${f}`);
         onProgress('retry', `⚠️ מבנה חסר (${missingFields.length} שדות). מנסה שוב…`);
-        await delay(GEMINI_CONFIG.retryDelayMs);
+        await delay(GROQ_CONFIG.retryDelayMs);
         retryCount++;
         continue;
       }
@@ -497,10 +495,10 @@ async function generateMealPlan(profile, onProgress = () => {}) {
     onProgress('dbscan', '🛡️ סורק חריגי DBSCAN -1…');
 
     const dbscanScan = scanForDBSCANOutliers(JSON.stringify(planJson));
-    if (dbscanScan.detected && profile.mode !== 'clinical' && retryCount < GEMINI_CONFIG.maxRetries) {
+    if (dbscanScan.detected && profile.mode !== 'clinical' && retryCount < GROQ_CONFIG.maxRetries) {
       lastViolations = dbscanScan.terms.map(t => `DBSCAN -1 חריג: "${t}"`);
       onProgress('retry', '🔴 זוהו פריטי DBSCAN -1 חסומים. מנסה שוב…');
-      await delay(GEMINI_CONFIG.retryDelayMs);
+      await delay(GROQ_CONFIG.retryDelayMs);
       retryCount++;
       continue;
     }
@@ -510,19 +508,15 @@ async function generateMealPlan(profile, onProgress = () => {}) {
     const { valid: complianceValid, violations } = validateMealPlanCompliance(planJson, profile);
 
     if (!complianceValid) {
-      if (retryCount < GEMINI_CONFIG.maxRetries) {
+      if (retryCount < GROQ_CONFIG.maxRetries) {
         lastViolations = violations;
-        onProgress('retry', `⚠️ נמצאו ${violations.length} הפרות ציות תזונתי. מנסה שוב (${retryCount + 1}/${GEMINI_CONFIG.maxRetries})…`);
-        await delay(GEMINI_CONFIG.retryDelayMs);
+        onProgress('retry', `⚠️ נמצאו ${violations.length} הפרות ציות. מנסה שוב (${retryCount + 1}/${GROQ_CONFIG.maxRetries})…`);
+        await delay(GROQ_CONFIG.retryDelayMs);
         retryCount++;
         continue;
       }
       return {
-        success: true,
-        planJson,
-        violations,
-        retryCount,
-        dbscanScan,
+        success: true, planJson, violations, retryCount, dbscanScan,
         warning: 'הגרסה הזמינה עשויה להכיל חריגות קלות. מומלץ לאמת עם תזונאי.',
       };
     }
@@ -535,12 +529,10 @@ async function generateMealPlan(profile, onProgress = () => {}) {
 }
 
 /* ============================================================
-   SECTION 10 — FOLLOW-UP CHAT HANDLER
-   sendGeminiRequest with isJsonOutput=false returns raw text.
-   TC-06: [OFF_DOMAIN] marker triggers styled error bubble in UI.
+   SECTION 10 — FOLLOW-UP CHAT HANDLER (TC-06 off-domain)
 ============================================================ */
 
-async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = []) {
+async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [], selectedModel = null) {
   const { isNonHebrew, NON_HEBREW_RESPONSE } = window.NutriAgent;
 
   if (isNonHebrew(userQuery)) {
@@ -549,40 +541,32 @@ async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [
 
   const systemPrompt = buildFollowupSystemPrompt(profile, planJson);
 
-  // Build conversation history: last 6 turns flattened to user/model pairs
   const historyMessages = chatHistory.slice(-6).flatMap(turn => [
     { role: 'user',      content: turn.question },
     { role: 'assistant', content: turn.answer   },
   ]);
-
   const messages = [
     ...historyMessages,
     { role: 'user', content: userQuery },
   ];
 
   try {
-    // isJsonOutput=false → returns raw text string
-    const reply = (await sendGeminiRequest(systemPrompt, messages, false)).trim();
+    const reply = (await sendGroqRequest(systemPrompt, messages, selectedModel, false)).trim();
 
-    // TC-06: Detect off-domain marker injected by system prompt instruction
     if (reply.startsWith('[OFF_DOMAIN]')) {
-      return {
-        success:     true,
-        reply:       reply.replace('[OFF_DOMAIN]', '').trim(),
-        isOffDomain: true,
-      };
+      return { success: true, reply: reply.replace('[OFF_DOMAIN]', '').trim(), isOffDomain: true };
     }
-
     return { success: true, reply };
+
   } catch (err) {
     if (err.message === 'API_KEY_MISSING') {
-      return { success: false, error: 'API_KEY_MISSING', reply: 'מפתח Gemini API חסר.' };
+      return { success: false, error: 'API_KEY_MISSING', reply: 'מפתח Groq API חסר.' };
     }
     if (err.message.startsWith('QUOTA_EXCEEDED')) {
       const seconds = parseInt(err.message.split(':')[1], 10) || 60;
       return {
-        success: true,   // show as a styled message, not a crash
-        reply: `⏳ **חריגה ממגבלת קצב (429)**\n\nGemini API מוגבל כרגע. אנא המתן **${seconds} שניות** ונסה לשאול שוב.`,
+        success: true,
+        reply: `⏳ **חריגה ממגבלת קצב (429)**\n\nGroq API מוגבל כרגע. אנא המתן **${seconds} שניות** ונסה לשאול שוב.`,
         isQuotaError: true,
       };
     }
@@ -592,40 +576,33 @@ async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [
 
 /* ============================================================
    SECTION 11 — API KEY LIVE VALIDATION
-   Performs a minimal real API call to confirm the key works.
 ============================================================ */
 
 async function validateAPIKey(key) {
   if (!APIKeyManager.validate(key)) {
-    return { valid: false, error: 'פורמט מפתח לא תקין. המפתח חייב להיות ארוך מ-20 תווים.' };
+    return { valid: false, error: 'פורמט מפתח לא תקין. מפתח Groq API מתחיל ב-gsk_ ואורכו 56 תווים.' };
   }
 
   const previous = APIKeyManager.get();
   APIKeyManager.save(key);
 
   try {
-    const reply = await sendGeminiRequest(
-      'ענה תמיד בעברית.',
-      [{ role: 'user', content: 'ענה בדיוק במילה: שלום' }],
+    const reply = await sendGroqRequest(
+      'You are a helpful assistant. Answer very briefly.',
+      [{ role: 'user', content: 'Reply with exactly one word: שלום' }],
+      GROQ_CONFIG.defaultModel,
       false
     );
-    if (reply?.length > 0) {
-      return { valid: true };
-    }
+    if (reply?.length > 0) return { valid: true };
     return { valid: false, error: 'המפתח לא החזיר תגובה תקינה.' };
   } catch (err) {
-    // Restore previous key on failure
-    if (previous) {
-      APIKeyManager.save(previous);
-    } else {
-      APIKeyManager.clear();
-    }
+    if (previous) { APIKeyManager.save(previous); } else { APIKeyManager.clear(); }
     const msg = err.message || '';
-    if (msg.includes('400') || msg.includes('API key not valid')) {
-      return { valid: false, error: 'מפתח Gemini API לא תקין. אנא בדוק שהמפתח נכון.' };
+    if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Invalid API Key')) {
+      return { valid: false, error: 'מפתח Groq API לא תקין. בדוק שהמפתח מתחיל ב-gsk_.' };
     }
-    if (msg.includes('429')) {
-      return { valid: false, error: 'חריגה ממגבלת קצב (429). אנא נסה שוב בעוד מספר שניות.' };
+    if (msg.startsWith('QUOTA_EXCEEDED')) {
+      return { valid: false, error: 'חריגה ממגבלת קצב (429). אנא המתן מספר שניות ונסה שוב.' };
     }
     return { valid: false, error: `שגיאת API: ${msg}` };
   }
@@ -663,8 +640,6 @@ function extractClusterIndex(tagStr) {
 
 /* ============================================================
    SECTION 13 — GLOBAL EXPORTS
-   Same interface as openaiclient.js so chatbot-ui.js requires
-   zero changes to its API calls.
 ============================================================ */
 
 window.NutriAgentAPI = Object.freeze({
@@ -679,13 +654,14 @@ window.NutriAgentAPI = Object.freeze({
   extractClusterIndex,
   validateMealPlanStructure,
   scanForDBSCANOutliers,
+  GROQ_MODELS,
   delay,
 });
 
 console.log(
-  '%c🤖 NutriAgent Gemini Client Loaded',
-  'color:#22d3ee;font-weight:bold;font-size:14px',
-  '| Model:', GEMINI_CONFIG.model,
-  '| Auth: X-goog-api-key header',
+  '%c⚡ NutriAgent Groq Client Loaded',
+  'color:#f0abfc;font-weight:bold;font-size:14px',
+  '| Default model:', GROQ_CONFIG.defaultModel,
+  '| Auth: Bearer gsk_...',
   '| Storage: sessionStorage',
 );

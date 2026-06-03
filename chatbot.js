@@ -1847,7 +1847,7 @@ class NutriAgentFSM {
         `מעולה! ${genderInflect(this.profile.detectedGender || this.profile.gender, 'מתחיל', 'מתחילה')} ליצור את תוכנית הארוחות עבורך…\n` +
         '🧬 מפעיל מנוע K-Means ו-DBSCAN…\n' +
         '⚙️ מחשב פרמטרים תזונתיים…\n' +
-        '🤖 שולח נתונים ל-Gemini 2.5 Flash…',
+        '🤖 שולח נתונים ל-Groq…',
         { type: 'generating', triggerGeneration: true }
       );
     }
@@ -1977,7 +1977,7 @@ class NutriAgentFSM {
   ---------------------------------------------------------- */
   _handleFollowup(input) {
     this.state = FSM_STATES.FOLLOWUP;
-    // The actual AI call is handled in openaiclient.js via the UI layer.
+    // The actual AI call is handled in groqclient.js via the UI layer.
     // Here we just return a trigger descriptor.
     return this._response('', {
       type: 'followup_query',
@@ -2024,7 +2024,7 @@ class NutriAgentFSM {
   }
 
   /* ----------------------------------------------------------
-     13.16 — PUBLIC ACCESSORS (called by UI & openaiclient)
+     13.16 — PUBLIC ACCESSORS (called by UI & groqclient)
   ---------------------------------------------------------- */
 
   /** Returns a read-only snapshot of the current profile. */
@@ -2099,7 +2099,7 @@ class NutriAgentFSM {
    SECTION 14 — DIETARY COMPLIANCE VALIDATOR
    Post-generation scan: checks the AI-returned JSON for
    violations against user's gluten-free / lactose-free tags.
-   Called by openaiclient.js before rendering.
+   Called by groqclient.js before rendering.
 ============================================================ */
 
 const GLUTEN_KEYWORDS   = ['חיטה','שיבולת','לחם','פיתה','פסטה','קוסקוס','סולת','עוגה','עוגיה','קמח','לביבה','פנקייק','קרקר','מצה','בורגול'];

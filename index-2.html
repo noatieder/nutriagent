@@ -98,6 +98,18 @@
           </button>
         </nav>
 
+        <!-- Model selector -->
+        <div class="topbar__model-select" title="בחר מודל Groq">
+          <label for="model-selector" class="topbar__model-label">
+            <span aria-hidden="true">⚡</span> מודל
+          </label>
+          <select id="model-selector" class="model-selector" aria-label="בחירת מודל AI">
+            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B ⭐</option>
+            <option value="llama-3.1-8b-instant">Llama 3.1 8B ⚡</option>
+            <option value="llama-3.3-70b-specdec">Llama 3.3 70B SpDec</option>
+          </select>
+        </div>
+
         <!-- Status indicators -->
         <div class="topbar__status" aria-live="polite" aria-atomic="true">
           <div class="status-dot status-dot--online" id="api-status-dot" title="חיבור API פעיל"></div>
@@ -718,19 +730,19 @@
       aria-hidden="true"
     >
       <div class="api-key-card">
-        <div class="api-key-card__logo" aria-hidden="true">🌿</div>
+        <div class="api-key-card__logo" aria-hidden="true">⚡</div>
         <h1 class="api-key-card__title" id="api-key-overlay-title">ברוכים הבאים ל-NutriAgent</h1>
         <p class="api-key-card__desc">
-          כדי להפעיל את המערכת, יש להזין מפתח API תקין של Google Gemini.<br/>
-          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי Google.
+          כדי להפעיל את המערכת, יש להזין מפתח API תקין של <strong>Groq</strong>.<br/>
+          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי Groq.
         </p>
         <div class="api-key-card__input-group">
-          <label for="api-key-input" class="api-key-card__label">מפתח Google Gemini API</label>
+          <label for="api-key-input" class="api-key-card__label">מפתח Groq API</label>
           <input
             type="password"
             id="api-key-input"
             class="api-key-card__input"
-            placeholder="AIza..."
+            placeholder="gsk_..."
             autocomplete="off"
             spellcheck="false"
             dir="ltr"
@@ -743,7 +755,8 @@
           הפעל את NutriAgent →
         </button>
         <p class="api-key-card__note">
-          🔒 המפתח מאוחסן ב-<code>localStorage</code> בלבד. לאבטחה מרבית, השתמש במפתח ייעודי עם הגבלת שימוש.
+          🔒 המפתח מאוחסן ב-<code>sessionStorage</code> בלבד ונמחק עם סגירת הטאב.<br/>
+          לקבלת מפתח חינם: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--color-accent-primary)">console.groq.com/keys</a>
         </p>
       </div>
     </div>
@@ -755,7 +768,7 @@
        All modules use ES6 patterns; deferred to after DOM parse
   ================================================================ -->
   <script src="nutrilogger.js"></script>
-  <script src="geminiclient.js" defer></script>
+  <script src="groqclient.js" defer></script>
   <script src="chatbot.js" defer></script>
   <script src="chatbot-ui.js" defer></script>
 

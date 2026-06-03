@@ -41,6 +41,7 @@ function resolveDOM() {
   DOM.btnModeClinical  = document.getElementById('btn-mode-clinical');
   DOM.apiStatusDot     = document.getElementById('api-status-dot');
   DOM.apiStatusLabel   = document.getElementById('api-status-label');
+  DOM.modelSelector    = document.getElementById('model-selector');
 
   // Chat
   DOM.chatMessages     = document.getElementById('chat-messages');
@@ -329,7 +330,8 @@ async function handleMealPlanGeneration() {
   };
 
   try {
-    const result = await generateMealPlan(profile, onProgress);
+    const selectedModel = DOM.modelSelector?.value || null;
+    const result = await generateMealPlan(profile, selectedModel, onProgress);
 
     if (!result.success) {
       handleGenerationError(result);
@@ -412,7 +414,7 @@ function handleGenerationError(result) {
     NETWORK_ERROR:        '🌐 שגיאת רשת. בדוק את החיבור לאינטרנט ונסה שוב.',
     JSON_PARSE_ERROR:     '⚠️ שגיאת פורמט תגובה. נסה שוב.',
     MAX_RETRIES_EXCEEDED: '❌ לא הצלחנו ליצור תוכנית תקינה לאחר מספר ניסיונות. נסה שוב.',
-    QUOTA_EXCEEDED:       `⏳ חריגה ממגבלת קצב Gemini API (429).\nאנא המתן ${result.retryAfterSeconds || 60} שניות ונסה שוב.`,
+    QUOTA_EXCEEDED:       `⏳ חריגה ממגבלת קצב Groq API (429).\nאנא המתן ${result.retryAfterSeconds || 60} שניות ונסה שוב.`,
   };
 
   const msg = errorMessages[result.error] || result.message || 'שגיאה לא ידועה.';
@@ -450,7 +452,8 @@ async function handleFollowupQuery(text) {
     text,
     fsm.getProfile(),
     UIState.currentPlanJson,
-    UIState.chatHistory
+    UIState.chatHistory,
+    DOM.modelSelector?.value || null
   );
 
   hideTypingIndicator();
@@ -1362,9 +1365,9 @@ async function handleAPIKeyConfirm() {
 
   const { APIKeyManager, validateAPIKey } = window.NutriAgentAPI;
 
-  // Validate format (Gemini keys are >20 chars, typically start with AIza)
+  // Groq keys start with gsk_ and are 56 chars; minimum check is length > 20
   if (!APIKeyManager.validate(key)) {
-    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. מפתח Gemini API חייב להיות ארוך מ-20 תווים (לדוגמה: AIza...).';
+    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. מפתח Groq API מתחיל ב-gsk_ ואורכו 56 תווים.';
     return;
   }
 

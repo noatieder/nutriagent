@@ -16,3 +16,6 @@ __pycache__/
 *.env
 .env.*
 secrets.*
+
+# Course instruction files
+instruction/
