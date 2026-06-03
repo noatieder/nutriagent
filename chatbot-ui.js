@@ -412,6 +412,7 @@ function handleGenerationError(result) {
     NETWORK_ERROR:        '🌐 שגיאת רשת. בדוק את החיבור לאינטרנט ונסה שוב.',
     JSON_PARSE_ERROR:     '⚠️ שגיאת פורמט תגובה. נסה שוב.',
     MAX_RETRIES_EXCEEDED: '❌ לא הצלחנו ליצור תוכנית תקינה לאחר מספר ניסיונות. נסה שוב.',
+    QUOTA_EXCEEDED:       `⏳ חריגה ממגבלת קצב Gemini API (429).\nאנא המתן ${result.retryAfterSeconds || 60} שניות ונסה שוב.`,
   };
 
   const msg = errorMessages[result.error] || result.message || 'שגיאה לא ידועה.';
@@ -455,6 +456,11 @@ async function handleFollowupQuery(text) {
   hideTypingIndicator();
 
   if (result.success) {
+    // Quota exceeded — show as warning, don't store in history
+    if (result.isQuotaError) {
+      renderFollowupMessage(result.reply, { type: 'warning' });
+      return;
+    }
     // TC-06: off-domain request — show styled error bubble
     const msgType = result.isOffDomain ? 'off-domain-error' : 'followup';
     renderFollowupMessage(result.reply, { type: msgType });

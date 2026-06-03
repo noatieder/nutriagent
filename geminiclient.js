@@ -336,6 +336,14 @@ async function sendGeminiRequest(systemPrompt, conversationHistory, isJsonOutput
       errorMsg = errBody?.error?.message || errorMsg;
       L?.error('API', `API error body`, errBody);
     } catch { /* ignore parse error on error body */ }
+
+    // 429 — extract retry-after seconds and surface as a distinct error type
+    if (response.status === 429) {
+      const retryMatch = errorMsg.match(/retry in ([\d.]+)s/i);
+      const retrySeconds = retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 60;
+      throw new Error(`QUOTA_EXCEEDED:${retrySeconds}`);
+    }
+
     throw new Error(`API_ERROR: ${errorMsg}`);
   }
 
@@ -443,6 +451,16 @@ async function generateMealPlan(profile, onProgress = () => {}) {
     } catch (err) {
       if (err.message === 'API_KEY_MISSING') {
         return { success: false, error: 'API_KEY_MISSING', message: 'מפתח Gemini API חסר. אנא הגדר מפתח תקין בהגדרות.' };
+      }
+      // 429 Quota — never retry, surface the wait time immediately
+      if (err.message.startsWith('QUOTA_EXCEEDED')) {
+        const seconds = parseInt(err.message.split(':')[1], 10) || 60;
+        return {
+          success: false,
+          error:   'QUOTA_EXCEEDED',
+          retryAfterSeconds: seconds,
+          message: `⏳ חריגה ממגבלת קצב Gemini API.\nאנא המתן **${seconds} שניות** ונסה שוב.`,
+        };
       }
       if (err.message.startsWith('JSON_PARSE_FAILED')) {
         if (retryCount < GEMINI_CONFIG.maxRetries) {
@@ -559,6 +577,14 @@ async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [
   } catch (err) {
     if (err.message === 'API_KEY_MISSING') {
       return { success: false, error: 'API_KEY_MISSING', reply: 'מפתח Gemini API חסר.' };
+    }
+    if (err.message.startsWith('QUOTA_EXCEEDED')) {
+      const seconds = parseInt(err.message.split(':')[1], 10) || 60;
+      return {
+        success: true,   // show as a styled message, not a crash
+        reply: `⏳ **חריגה ממגבלת קצב (429)**\n\nGemini API מוגבל כרגע. אנא המתן **${seconds} שניות** ונסה לשאול שוב.`,
+        isQuotaError: true,
+      };
     }
     return { success: false, error: 'NETWORK_ERROR', reply: 'מצטער, אירעה שגיאת רשת. אנא נסה שוב.' };
   }
