@@ -15,10 +15,10 @@
  *  - Meal dashboard population & reveal
  *  - Swap button logic (Cosine Similarity → UI)
  *  - Swap history log
- *  - DBSCAN status badge updates
+ *  - Dietary tags cloud rendering
  *  - Toast notification system
  *  - Modal dialog management
- *  - Mode toggle (private ↔ clinical)
+ *  - Session management (private users only)
  *  - Quick-chip suggestion rendering
  *  - Textarea auto-resize & send button state
  *  - Print handler
@@ -38,10 +38,8 @@ const DOM = {};
 function resolveDOM() {
   // Top bar
   DOM.btnModePrivate   = document.getElementById('btn-mode-private');
-  DOM.btnModeClinical  = document.getElementById('btn-mode-clinical');
   DOM.apiStatusDot     = document.getElementById('api-status-dot');
   DOM.apiStatusLabel   = document.getElementById('api-status-label');
-  DOM.modelSelector    = document.getElementById('model-selector');
   DOM.btnThemeToggle   = document.getElementById('btn-theme-toggle');
   DOM.btnRestart       = document.getElementById('btn-restart');
   DOM.topbarBrand      = document.querySelector('.topbar__brand');
@@ -69,12 +67,8 @@ function resolveDOM() {
   DOM.bmiGaugeContainer   = document.getElementById('bmi-gauge-container');
   DOM.dietaryTagsSection  = document.getElementById('dietary-tags-section');
   DOM.dietaryTagsCloud    = document.getElementById('dietary-tags-cloud');
-  DOM.clinicalAuditSection= document.getElementById('clinical-audit-section');
-  DOM.clinicalLog         = document.getElementById('clinical-log');
-
+  DOM.btnEditProfile   = document.getElementById('btn-edit-profile');
   // Sidebar — right (intel)
-  DOM.dbscanBadge         = document.getElementById('dbscan-badge');
-  DOM.dbscanCountVal      = document.getElementById('dbscan-count-val');
   DOM.swapHistoryList     = document.getElementById('swap-history-list');
   DOM.swapHistoryEmpty    = document.getElementById('swap-history-empty');
   DOM.fsmStageList        = document.getElementById('fsm-stage-list');
@@ -82,7 +76,6 @@ function resolveDOM() {
   // Meal dashboard
   DOM.mealDashboard         = document.getElementById('meal-dashboard');
   DOM.totalCaloriesDisplay  = document.getElementById('total-calories-display');
-  DOM.calorieBreakdownText  = document.getElementById('calorie-breakdown-text');
   DOM.planSummaryBanner     = document.getElementById('plan-summary-banner');
   DOM.planSummaryText       = document.getElementById('plan-summary-text');
   DOM.complianceBadge       = document.getElementById('compliance-badge');
@@ -117,11 +110,12 @@ function resolveDOM() {
 ============================================================ */
 const UIState = {
   isProcessing:   false,
-  currentMode:    'private',   // 'private' | 'clinical'
+  currentMode:    'private',
   chatHistory:    [],          // for follow-up context
   currentPlanJson: null,
   profileFieldsMap: {},        // fieldKey → <dd> element for live update
   swapSourceIds:  {},          // mealSlot → food_item_id for swap engine
+  swapSourceCluster: {},
 };
 
 // Timer handle for hideQuickChips — must be cancelled before rendering new chips
@@ -167,10 +161,6 @@ function bindEvents() {
     DOM.btnSend.disabled = DOM.userInput.value.trim().length === 0;
   });
 
-  // Mode toggle buttons
-  DOM.btnModePrivate.addEventListener('click',  () => setMode('private'));
-  DOM.btnModeClinical.addEventListener('click', () => setMode('clinical'));
-
   // Quick chips (event delegation)
   DOM.quickChips.addEventListener('click', (e) => {
     const chip = e.target.closest('.quick-chip');
@@ -208,16 +198,7 @@ function bindEvents() {
   DOM.btnRestart.addEventListener('click', () => confirmRestart());
   DOM.topbarBrand.addEventListener('click', () => confirmRestart());
 
-  // K-Means cluster legend — click to view food table
-  document.querySelectorAll('.cluster-legend__item[data-cluster]').forEach(el => {
-    el.addEventListener('click', () => showClusterTable(parseInt(el.dataset.cluster, 10)));
-    el.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        showClusterTable(parseInt(el.dataset.cluster, 10));
-      }
-    });
-  });
+  DOM.btnEditProfile?.addEventListener('click', reEditProfile);
 
   // Print button
   DOM.btnPrintPlan.addEventListener('click', () => window.print());
@@ -296,6 +277,7 @@ async function submitInput(text) {
       renderAgentMessage(summaryResp.text, summaryResp);
       updateSidebarFromResponse(summaryResp);
       renderQuickChips(summaryResp.quickChips);
+      updateFSMStageIndicator('summary');
     } else {
       renderAgentMessage(response.text, response);
       updateSidebarFromResponse(response);
@@ -330,8 +312,6 @@ async function handleMealPlanGeneration() {
 
   const profile = fsm.getProfile();
 
-  // Update DBSCAN badge to scanning
-  updateDBSCANBadge('scanning', 'סורק…');
   updateFSMStageIndicator('generating');
 
   // Show generation progress messages
@@ -344,28 +324,18 @@ async function handleMealPlanGeneration() {
   };
 
   try {
-    const selectedModel = DOM.modelSelector?.value || null;
-    const result = await generateMealPlan(profile, selectedModel, onProgress);
+    const result = await generateMealPlan(profile, null, onProgress);
 
     if (!result.success) {
       handleGenerationError(result);
       return;
     }
 
-    const { planJson, violations, retryCount, dbscanScan, warning } = result;
+    const { planJson, violations, warning } = result;
 
     // Store plan
     UIState.currentPlanJson = planJson;
     fsm.onPlanGenerated(planJson);
-
-    // Update DBSCAN badge
-    if (dbscanScan?.detected) {
-      updateDBSCANBadge('flagged', `זוהו ${dbscanScan.terms.length} חריגים`);
-      DOM.dbscanCountVal.textContent = dbscanScan.terms.length;
-    } else {
-      updateDBSCANBadge('clear', 'ניקוי מלא ✓');
-      DOM.dbscanCountVal.textContent = '0';
-    }
 
     // Render compliance warning if any
     if (warning || violations.length > 0) {
@@ -377,11 +347,6 @@ async function handleMealPlanGeneration() {
 
     // Populate and reveal meal dashboard
     await populateMealDashboard(planJson, profile);
-
-    // Log to clinical audit (visible in clinical mode)
-    if (planJson.conversation_summary) {
-      appendClinicalLog(planJson.conversation_summary);
-    }
 
     // Transition to follow-up mode
     fsm.enterFollowupMode();
@@ -408,9 +373,11 @@ async function handleMealPlanGeneration() {
 
     showToast('🌿 תוכנית הארוחות נוצרה בהצלחה!', 'success');
 
+    // Show the profile edit button after plan is generated
+    if (DOM.btnEditProfile) DOM.btnEditProfile.style.display = '';
+
   } catch (err) {
     console.error('[NutriAgent] Generation error:', err);
-    updateDBSCANBadge('idle', 'שגיאה');
     renderAgentMessage(
       '❌ אירעה שגיאה ביצירת תוכנית הארוחות. אנא נסה שוב.',
       { type: 'error' }
@@ -433,7 +400,6 @@ function handleGenerationError(result) {
 
   const msg = errorMessages[result.error] || result.message || 'שגיאה לא ידועה.';
   renderAgentMessage(msg, { type: 'error' });
-  updateDBSCANBadge('idle', 'שגיאה');
 
   if (result.error === 'API_KEY_MISSING') {
     showAPIKeyOverlay();
@@ -467,7 +433,7 @@ async function handleFollowupQuery(text) {
     fsm.getProfile(),
     UIState.currentPlanJson,
     UIState.chatHistory,
-    DOM.modelSelector?.value || null
+    null
   );
 
   hideTypingIndicator();
@@ -804,22 +770,35 @@ function updateMetricsBlock(bmiData, profile) {
 }
 
 /**
- * Animates the BMI gauge needle to the correct position.
- * @param {number} bmi
+ * Animates the BMI gauge needle to the correct position based on the actual BMI value.
+ * Each gauge segment maps linearly to its BMI zone:
+ *   Underweight (BMI 10–18.5) → 0–25%
+ *   Normal      (BMI 18.5–25) → 25–50%
+ *   Overweight  (BMI 25–30)   → 50–75%
+ *   Obese       (BMI 30–40)   → 75–100%
+ * @param {number|string} bmi
  * @param {string} bmiCategory
  */
 function animateBMIGaugeNeedle(bmi, bmiCategory) {
   const { BMI_CATEGORIES } = window.NutriAgent;
+  const bmiNum = parseFloat(bmi) || 22;
 
-  // Map category to approximate gauge percentage
-  const positionMap = {
-    [BMI_CATEGORIES.UNDERWEIGHT]: 10,
-    [BMI_CATEGORIES.NORMAL]:      38,
-    [BMI_CATEGORIES.OVERWEIGHT]:  65,
-    [BMI_CATEGORIES.OBESE]:       88,
-  };
-
-  const position = positionMap[bmiCategory] || 38;
+  // Compute 0–100 on a LTR scale (0=underweight extreme, 100=obese extreme),
+  // then invert because the RTL gauge places obese on the physical LEFT (left: ~0%)
+  // and underweight on the physical RIGHT (left: ~100%).
+  let rawPos;
+  if (bmiNum <= 10) {
+    rawPos = 0;
+  } else if (bmiNum <= 18.5) {
+    rawPos = ((bmiNum - 10) / (18.5 - 10)) * 25;
+  } else if (bmiNum <= 25) {
+    rawPos = 25 + ((bmiNum - 18.5) / (25 - 18.5)) * 25;
+  } else if (bmiNum <= 30) {
+    rawPos = 50 + ((bmiNum - 25) / (30 - 25)) * 25;
+  } else {
+    rawPos = 75 + Math.min(25, ((bmiNum - 30) / (40 - 30)) * 25);
+  }
+  const position = Math.max(2, Math.min(98, 100 - rawPos));
   DOM.bmiGaugeNeedle.style.left = `${position}%`;
 
   // Highlight the active segment
@@ -942,11 +921,6 @@ async function populateMealDashboard(planJson, profile) {
   const totalCals = planJson.total_calories || sumMealCalories(planJson.meal_plan);
   DOM.totalCaloriesDisplay.textContent = totalCals.toLocaleString('he-IL');
 
-  // Calorie breakdown text
-  if (planJson.calorie_calculation) {
-    DOM.calorieBreakdownText.textContent = planJson.calorie_calculation;
-  }
-
   // Populate each meal card
   MEAL_SLOT_ORDER.forEach(slot => {
     const meal = planJson.meal_plan?.[slot];
@@ -954,10 +928,11 @@ async function populateMealDashboard(planJson, profile) {
 
     populateMealCard(slot, meal);
 
-    // Track food_item_ids for swap engine
+    // Track food_item_ids for swap engine; fall back to first item in cluster
     if (meal.food_item_ids?.length > 0) {
       UIState.swapSourceIds[slot] = meal.food_item_ids[0];
     }
+    // Cluster fallback is stored in populateMealCard via UIState.swapSourceCluster
   });
 
   // Summary banner
@@ -998,14 +973,16 @@ function populateMealCard(slot, meal) {
   if (nameEl) nameEl.textContent = meal.name      || '—';
   if (descEl) descEl.textContent = meal.description || '';
 
-  // Cluster tag rendering
-  if (clustEl && meal.cluster_tags?.length > 0) {
-    const primaryTag = meal.cluster_tags[0];
+  // Store cluster index for swap fallback (element kept hidden)
+  if (meal.cluster_tags?.length > 0) {
     const { extractClusterIndex } = window.NutriAgentAPI;
-    const clusterIdx = extractClusterIndex(primaryTag);
-
-    clustEl.textContent  = primaryTag;
-    clustEl.className    = `meal-card__cluster-tag meal-card__cluster-tag--${clusterIdx ?? 0}`;
+    const clusterIdx = extractClusterIndex(meal.cluster_tags[0]) ?? 0;
+    if (clustEl) {
+      clustEl.textContent = '';
+      clustEl.className = `meal-card__cluster-tag meal-card__cluster-tag--${clusterIdx}`;
+      clustEl.style.display = 'none';
+    }
+    UIState.swapSourceCluster[slot] = clusterIdx;
   }
 }
 
@@ -1023,12 +1000,16 @@ async function handleSwapClick(mealSlot) {
   const { mealSlotToHebrew } = window.NutriAgentAPI;
 
   const sourceId = UIState.swapSourceIds[mealSlot];
-  if (!sourceId) {
-    showToast('לא נמצא מזהה מזון לביצוע החלפה.', 'error');
-    return;
-  }
 
-  const candidates = fsm.getSwapCandidates(sourceId, 3);
+  let candidates = sourceId ? fsm.getSwapCandidates(sourceId, 3) : [];
+
+  // Fallback: use cluster-based selection when sourceId not in DB or no candidates
+  if (candidates.length === 0) {
+    const clusterIdx = UIState.swapSourceCluster[mealSlot] ?? null;
+    if (clusterIdx !== null) {
+      candidates = fsm.getClusterCandidates(clusterIdx, 3);
+    }
+  }
 
   if (candidates.length === 0) {
     showToast('לא נמצאו חלופות תואמות לפריט זה.', 'info');
@@ -1125,7 +1106,7 @@ async function handleSwapClick(mealSlot) {
  * @param {string} oldItemName
  */
 function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
-  const { fsm, FOOD_DATABASE, KMEANS_CLUSTERS } = window.NutriAgent;
+  const { fsm, FOOD_DATABASE } = window.NutriAgent;
   const newItem = FOOD_DATABASE.find(f => f.id === newItemId);
   if (!newItem) return;
 
@@ -1152,10 +1133,11 @@ function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
     if (calEl) calEl.textContent = servingCals;
 
     if (clustEl) {
-      const clusterInfo = KMEANS_CLUSTERS[newItem.cluster];
-      clustEl.textContent = clusterInfo?.nameShort || `אשכול ${newItem.cluster}`;
+      clustEl.textContent = '';
       clustEl.className = `meal-card__cluster-tag meal-card__cluster-tag--${newItem.cluster}`;
+      clustEl.style.display = 'none';
     }
+    UIState.swapSourceCluster[mealSlot] = newItem.cluster;
 
     // Update swap source tracking
     UIState.swapSourceIds[mealSlot] = newItemId;
@@ -1205,48 +1187,6 @@ function appendSwapHistory(mealSlot, from, to) {
   DOM.swapHistoryList.appendChild(item);
 }
 
-/* ============================================================
-   SECTION 15 — DBSCAN STATUS BADGE
-============================================================ */
-
-/**
- * Updates the DBSCAN status badge in the right sidebar.
- * @param {'idle'|'scanning'|'clear'|'flagged'} status
- * @param {string} label
- */
-function updateDBSCANBadge(status, label) {
-  DOM.dbscanBadge.className = `dbscan-status-card__badge dbscan-status-card__badge--${status}`;
-  DOM.dbscanBadge.textContent = label;
-}
-
-/* ============================================================
-   SECTION 16 — CLINICAL LOG (clinical mode only)
-============================================================ */
-
-/**
- * Appends an entry to the clinical audit log.
- * @param {string} text
- */
-function appendClinicalLog(text) {
-  // Remove "empty" placeholder
-  const emptyEl = DOM.clinicalLog.querySelector('.clinical-log__empty');
-  if (emptyEl) emptyEl.remove();
-
-  const entry = document.createElement('div');
-  entry.className = 'clinical-log__entry';
-
-  const timestamp = document.createElement('span');
-  timestamp.className = 'clinical-log__timestamp';
-  timestamp.textContent = currentTimeHebrew();
-
-  entry.appendChild(timestamp);
-  entry.appendChild(document.createTextNode(' ' + text));
-  DOM.clinicalLog.appendChild(entry);
-
-  if (UIState.currentMode === 'clinical') {
-    DOM.clinicalAuditSection.removeAttribute('aria-hidden');
-  }
-}
 
 /* ============================================================
    SECTION 17 — QUICK CHIPS
@@ -1417,32 +1357,6 @@ async function handleAPIKeyConfirm() {
   }
 }
 
-/* ============================================================
-   SECTION 22 — MODE TOGGLE
-============================================================ */
-
-/**
- * Switches between private and clinical mode.
- * @param {'private'|'clinical'} mode
- */
-function setMode(mode) {
-  UIState.currentMode = mode;
-  window.NutriAgent.fsm.setClinicalMode(mode === 'clinical');
-
-  // Update button states
-  DOM.btnModePrivate.classList.toggle('mode-btn--active',  mode === 'private');
-  DOM.btnModeClinical.classList.toggle('mode-btn--active', mode === 'clinical');
-  DOM.btnModePrivate.setAttribute('aria-selected',  mode === 'private'  ? 'true' : 'false');
-  DOM.btnModeClinical.setAttribute('aria-selected', mode === 'clinical' ? 'true' : 'false');
-
-  // Show/hide clinical audit section
-  if (mode === 'clinical') {
-    DOM.clinicalAuditSection.removeAttribute('aria-hidden');
-    showToast('🩺 מצב תזונאי קליני פעיל — גישה מורחבת לנתונים', 'info');
-  } else {
-    DOM.clinicalAuditSection.setAttribute('aria-hidden', 'true');
-  }
-}
 
 /* ============================================================
    SECTION 23 — API STATUS INDICATOR
@@ -1554,6 +1468,7 @@ function resetSession() {
   UIState.currentPlanJson = null;
   UIState.profileFieldsMap = {};
   UIState.swapSourceIds   = {};
+  UIState.swapSourceCluster = {};
   UIState.isProcessing    = false;
 
   // Clear chat messages
@@ -1582,8 +1497,6 @@ function resetSession() {
   DOM.bmiGaugeContainer.setAttribute('aria-hidden', 'true');
   DOM.dietaryTagsSection.setAttribute('aria-hidden', 'true');
   DOM.dietaryTagsCloud.innerHTML = '';
-  DOM.clinicalAuditSection.setAttribute('aria-hidden', 'true');
-  DOM.clinicalLog.innerHTML = '<p class="clinical-log__empty">היומן יתמלא לאחר יצירת תוכנית הארוחות.</p>';
   DOM.metricBMIValue.textContent      = '—';
   DOM.metricBMRValue.textContent      = '—';
   DOM.metricCaloriesValue.textContent = '—';
@@ -1604,7 +1517,6 @@ function resetSession() {
   hideQuickChips();
   hideTypingIndicator();
   updateFSMStageIndicator('greeting');
-  updateDBSCANBadge('idle', 'ממתין לסריקה');
   setAPIStatus('online');
 
   // Re-boot
@@ -1612,97 +1524,38 @@ function resetSession() {
   showToast('↺ השיחה התחילה מחדש', 'info', 2500);
 }
 
-/* ============================================================
-   SECTION 25c — K-MEANS CLUSTER TABLE MODAL
-   Opens a modal with a nutritional table for all foods
-   in the selected K-Means cluster (0–3).
-============================================================ */
 
-/**
- * Opens a modal showing all foods in a given K-Means cluster.
- * @param {number} clusterIdx — 0, 1, 2, or 3
- */
-function showClusterTable(clusterIdx) {
-  const { FOOD_DATABASE, KMEANS_CLUSTERS } = window.NutriAgent;
-  const cluster = KMEANS_CLUSTERS[clusterIdx];
-  if (!cluster) return;
+function reEditProfile() {
+  const { fsm } = window.NutriAgent;
 
-  const foods = FOOD_DATABASE.filter(f => f.cluster === clusterIdx);
-  const validFoods   = foods.filter(f => f.dbscan >= 0);
-  const outlierFoods = foods.filter(f => f.dbscan < 0);
+  // Reset FSM to summary state without clearing profile
+  fsm.state = window.NutriAgent.FSM_STATES.SUMMARY;
 
-  const clusterColors = {
-    0: { color: '#22d3ee', bg: 'rgba(34,211,238,0.08)', border: 'rgba(34,211,238,0.2)' },
-    1: { color: '#4ade80', bg: 'rgba(74,222,128,0.08)', border: 'rgba(74,222,128,0.2)' },
-    2: { color: '#fbbf24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)' },
-    3: { color: '#c084fc', bg: 'rgba(192,132,252,0.08)', border: 'rgba(192,132,252,0.2)' },
-  };
-  const c = clusterColors[clusterIdx];
-
-  function buildRows(items) {
-    return items.map(item => {
-      const servingCal = Math.round((item.per100g.calories * item.servingSizeG) / 100);
-      const dbscanBadge = item.dbscan < 0
-        ? `<span style="background:rgba(248,113,113,0.15);color:#f87171;border:1px solid rgba(248,113,113,0.3);border-radius:9999px;padding:1px 7px;font-size:10px;font-family:monospace">⛔ DBSCAN -1</span>`
-        : `<span style="background:rgba(74,222,128,0.1);color:#4ade80;border:1px solid rgba(74,222,128,0.2);border-radius:9999px;padding:1px 7px;font-size:10px;font-family:monospace">✓ תקין</span>`;
-      return `
-        <tr style="border-bottom:1px solid rgba(255,255,255,0.04);transition:background 0.15s"
-            onmouseover="this.style.background='rgba(255,255,255,0.03)'"
-            onmouseout="this.style.background=''">
-          <td style="padding:8px 10px;color:#e8f0fe;font-weight:500">${item.name}</td>
-          <td style="padding:8px 10px;color:#8ba3c7;font-size:12px">${item.nameEn}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px">${item.per100g.calories}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#4ade80">${item.per100g.protein}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#fbbf24">${item.per100g.fat}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#c084fc">${item.per100g.carbs}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;color:#8ba3c7">${item.per100g.fiber}</td>
-          <td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px">${item.servingSizeG}g <span style="color:#8ba3c7;font-size:10px">(${servingCal} קק"ל)</span></td>
-          <td style="padding:8px 10px;text-align:center">${dbscanBadge}</td>
-        </tr>`;
-    }).join('');
+  // Hide meal dashboard, show chat again
+  DOM.mealDashboard.classList.remove('visible');
+  DOM.mealDashboard.setAttribute('aria-hidden', 'true');
+  DOM.chatMessages.style.display = '';
+  if (DOM.followupChatSection) {
+    DOM.followupChatSection.classList.remove('visible');
+    DOM.followupChatSection.setAttribute('aria-hidden', 'true');
   }
 
-  const headerStyle = `padding:7px 10px;font-size:11px;font-weight:700;color:#8ba3c7;text-align:center;border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap`;
-  const headerStyleRight = `padding:7px 10px;font-size:11px;font-weight:700;color:#8ba3c7;text-align:right;border-bottom:1px solid rgba(255,255,255,0.08)`;
+  // Hide the edit button
+  if (DOM.btnEditProfile) DOM.btnEditProfile.style.display = 'none';
 
-  const tableHTML = `
-    <div style="margin-bottom:12px;padding:10px 14px;background:${c.bg};border:1px solid ${c.border};border-radius:10px">
-      <div style="font-size:13px;font-weight:700;color:${c.color}">${cluster.name}</div>
-      <div style="font-size:11px;color:#8ba3c7;margin-top:2px">${cluster.description}</div>
-      <div style="font-size:11px;color:#4a6080;margin-top:4px">
-        ${validFoods.length} פריטים תקינים · ${outlierFoods.length} חריגי DBSCAN -1
-      </div>
-    </div>
-    <div style="overflow-x:auto;max-height:420px;overflow-y:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;direction:rtl">
-        <thead style="position:sticky;top:0;background:#0d1525;z-index:1">
-          <tr>
-            <th style="${headerStyleRight}">שם עברי</th>
-            <th style="${headerStyleRight}">English</th>
-            <th style="${headerStyle}">קל׳/100g</th>
-            <th style="${headerStyle}">חלבון</th>
-            <th style="${headerStyle}">שומן</th>
-            <th style="${headerStyle}">פחמ׳</th>
-            <th style="${headerStyle}">סיבים</th>
-            <th style="${headerStyle}">מנה (קל׳)</th>
-            <th style="${headerStyle}">DBSCAN</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${buildRows(validFoods)}
-          ${outlierFoods.length > 0 ? `
-            <tr>
-              <td colspan="9" style="padding:8px 10px;font-size:11px;color:#f87171;font-weight:600;background:rgba(248,113,113,0.05);border-top:1px dashed rgba(248,113,113,0.2)">
-                ⛔ פריטי DBSCAN -1 — חסומים לפרופיל פרטי, גלויים בלבד למצב קליני
-              </td>
-            </tr>
-            ${buildRows(outlierFoods)}
-          ` : ''}
-        </tbody>
-      </table>
-    </div>`;
+  UIState.currentPlanJson = null;
+  UIState.isProcessing = false;
 
-  openModal(`🧬 אשכול ${clusterIdx} — ${cluster.nameShort}`, tableHTML);
+  // Re-render summary
+  const summaryResp = fsm.process('סיכום');
+  Promise.resolve(summaryResp).then(resp => {
+    renderAgentMessage(resp.text, resp);
+    updateSidebarFromResponse(resp);
+    renderQuickChips(resp.quickChips);
+    updateFSMStageIndicator('summary');
+    scrollToBottom();
+    DOM.userInput.placeholder = 'הקלד הודעה בעברית…';
+  });
 }
 
 /* ============================================================

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="NutriAgent – מערכת תמיכה קלינית חכמה לתזונאים ולמשתמשים פרטיים" />
+  <meta name="description" content="NutriAgent – מערכת תמיכה תזונתית חכמה למשתמשים פרטיים" />
   <meta name="theme-color" content="#0a1628" />
   <title>NutriAgent | מערכת תזונה חכמה</title>
 
@@ -69,7 +69,7 @@
               <span class="brand-logo__nutri">Nutri</span><span class="brand-logo__agent">Agent</span>
             </span>
           </div>
-          <div class="brand-tagline">מערכת תמיכה תזונתית קלינית</div>
+          <div class="brand-tagline">מערכת תמיכה תזונתית אישית</div>
         </div>
 
         <!-- Mode toggle: hidden — private mode only, buttons kept for JS compatibility -->
@@ -78,20 +78,14 @@
             <span class="mode-btn__icon">👤</span><span class="mode-btn__label">משתמש פרטי</span>
           </button>
           <button class="mode-btn" id="btn-mode-clinical" role="tab" aria-selected="false" aria-controls="panel-chat" data-mode="clinical" tabindex="-1">
-            <span class="mode-btn__icon">🩺</span><span class="mode-btn__label">תזונאי קליני</span>
+            <span class="mode-btn__icon">🩺</span><span class="mode-btn__label">תזונאי</span>
           </button>
         </nav>
 
-        <!-- Model selector -->
-        <div class="topbar__model-select" title="בחר מודל Groq">
-          <label for="model-selector" class="topbar__model-label">
-            <span aria-hidden="true">⚡</span> מודל
-          </label>
-          <select id="model-selector" class="model-selector" aria-label="בחירת מודל AI">
-            <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B ⭐</option>
-            <option value="llama-3.1-8b-instant">Llama 3.1 8B ⚡</option>
-            <option value="llama-3.3-70b-specdec">Llama 3.3 70B SpDec</option>
-          </select>
+        <!-- Model badge (fixed) -->
+        <div class="topbar__model-select" title="Groq Llama 3.3 70B">
+          <span class="topbar__model-label" aria-hidden="true">⚡</span>
+          <span class="model-badge">Llama 3.3 70B</span>
         </div>
 
         <!-- Restart button -->
@@ -144,6 +138,16 @@
               <!-- Dynamic profile fields rendered here -->
               <dl class="profile-fields" id="profile-fields" aria-label="שדות פרופיל תזונתי"></dl>
             </div>
+            <!-- Edit profile button — shown after plan is generated -->
+            <button
+              class="btn btn--ghost btn--sm profile-edit-btn"
+              id="btn-edit-profile"
+              aria-label="עריכת פרופיל תזונתי"
+              title="עדכן פרטים וצור תוכנית חדשה"
+              style="display:none;width:100%;margin-top:8px;"
+            >
+              ✏️ עריכת פרופיל
+            </button>
           </div>
 
           <!-- BMI / BMR Metrics Block -->
@@ -200,16 +204,6 @@
             <div class="tags-cloud" id="dietary-tags-cloud" aria-label="תגי אילוצים תזונתיים"></div>
           </div>
 
-          <!-- Clinical audit note (visible only in clinical mode) -->
-          <div class="sidebar__section sidebar__section--clinical" id="clinical-audit-section" aria-hidden="true">
-            <h2 class="sidebar__title">
-              <span class="sidebar__title-icon" aria-hidden="true">🔬</span>
-              יומן קליני
-            </h2>
-            <div class="clinical-log" id="clinical-log">
-              <p class="clinical-log__empty">היומן יתמלא לאחר יצירת תוכנית הארוחות.</p>
-            </div>
-          </div>
 
         </div>
       </aside>
@@ -276,11 +270,6 @@
             >
               <span aria-hidden="true">🖨️</span> הדפסה
             </button>
-          </div>
-
-          <!-- Calorie Calculation Clinical Breakdown -->
-          <div class="calorie-breakdown-strip" id="calorie-breakdown-strip" aria-label="פירוט חישוב קלורי">
-            <p class="calorie-breakdown-strip__text" id="calorie-breakdown-text"></p>
           </div>
 
           <!-- Macro Distribution Bar -->
@@ -484,10 +473,10 @@
             <p class="plan-summary-banner__text" id="plan-summary-text"></p>
           </div>
 
-          <!-- DBSCAN Compliance Badge -->
+          <!-- Compliance Badge -->
           <div class="compliance-badge" id="compliance-badge" aria-label="אישור עמידה בסטנדרטים" aria-hidden="true">
             <span class="compliance-badge__icon" aria-hidden="true">✅</span>
-            <span class="compliance-badge__text">אומת: אפס פריטי DBSCAN-1 | עמידה מלאה באילוצים התזונתיים</span>
+            <span class="compliance-badge__text">אומת: עמידה מלאה באילוצים התזונתיים</span>
           </div>
 
           <!-- Follow-up Q&A Section — shown after plan generation -->
@@ -573,74 +562,6 @@
       ---------------------------------------------------------- -->
       <aside class="sidebar sidebar--right" id="sidebar-intel" aria-label="מידע תזונתי נוסף">
         <div class="sidebar__inner">
-
-          <!-- K-Means Cluster Legend -->
-          <div class="sidebar__section">
-            <h2 class="sidebar__title">
-              <span class="sidebar__title-icon" aria-hidden="true">🧬</span>
-              אשכולות מזון (K-Means)
-            </h2>
-            <div class="cluster-legend">
-              <div class="cluster-legend__item cluster-legend__item--0" data-cluster="0" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
-                <div class="cluster-legend__dot"></div>
-                <div class="cluster-legend__info">
-                  <strong>אשכול 0</strong>
-                  <span>נפח / הידרציה / צפיפות נמוכה</span>
-                  <small>עלים ירוקים, פירות טריים, מרקים</small>
-                </div>
-                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
-              </div>
-              <div class="cluster-legend__item cluster-legend__item--1" data-cluster="1" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
-                <div class="cluster-legend__dot"></div>
-                <div class="cluster-legend__info">
-                  <strong>אשכול 1</strong>
-                  <span>חלבון רזה</span>
-                  <small>חזה עוף, טונה, פילה קוד, חלבוני ביצה</small>
-                </div>
-                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
-              </div>
-              <div class="cluster-legend__item cluster-legend__item--2" data-cluster="2" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
-                <div class="cluster-legend__dot"></div>
-                <div class="cluster-legend__info">
-                  <strong>אשכול 2</strong>
-                  <span>שומנים בריאים / אנרגיה צפופה</span>
-                  <small>שמן זית, אגוזים, טחינה, אבוקדו</small>
-                </div>
-                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
-              </div>
-              <div class="cluster-legend__item cluster-legend__item--3" data-cluster="3" role="button" tabindex="0" title="לחץ לצפייה בכל מזונות האשכול">
-                <div class="cluster-legend__dot"></div>
-                <div class="cluster-legend__info">
-                  <strong>אשכול 3</strong>
-                  <span>פחמימות מורכבות</span>
-                  <small>אורז מלא, קינואה, שיבולת שועל, לחם כוסמין</small>
-                </div>
-                <span class="cluster-legend__expand-hint" aria-hidden="true">📋</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- DBSCAN Guardrail Status -->
-          <div class="sidebar__section">
-            <h2 class="sidebar__title">
-              <span class="sidebar__title-icon" aria-hidden="true">🛡️</span>
-              מגן DBSCAN
-            </h2>
-            <div class="dbscan-status-card" id="dbscan-status-card">
-              <div class="dbscan-status-card__header">
-                <span class="dbscan-status-card__badge dbscan-status-card__badge--idle" id="dbscan-badge">
-                  ממתין לסריקה
-                </span>
-              </div>
-              <p class="dbscan-status-card__desc">
-                פריטים המסווגים כ-DBSCAN -1 (חריגים/רעש) חסומים אוטומטית ממשתמשים פרטיים ללא אישור קליני.
-              </p>
-              <div class="dbscan-outlier-count" id="dbscan-outlier-count" aria-hidden="true">
-                <span>חריגים זוהו:</span>
-                <strong id="dbscan-count-val">—</strong>
-              </div>
-            </div>
-          </div>
 
           <!-- Swap History Log -->
           <div class="sidebar__section" id="swap-history-section">

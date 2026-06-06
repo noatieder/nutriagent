@@ -8,7 +8,6 @@
  *  - Physiological calculations: BMI, BMR, caloric targets
  *  - Adult BMI category mapping (WHO standard, ages 18+)
  *  - Embedded food database with K-Means cluster tags
- *  - DBSCAN -1 outlier guardrail enforcement
  *  - Cosine Similarity intra-cluster swap engine
  *  - Hebrew gender morphology detection & enforcement
  *  - Non-Hebrew input detection & rejection
@@ -150,7 +149,6 @@ const KMEANS_CLUSTERS = Object.freeze({
      name:      Hebrew display name,
      nameEn:    English reference name,
      cluster:   K-Means cluster index (0–3),
-     dbscan:    DBSCAN cluster index (-1 = outlier/noise, 0+ = valid),
      per100g: {
        calories, protein, fat, carbs, fiber, sugar
      },
@@ -159,113 +157,111 @@ const KMEANS_CLUSTERS = Object.freeze({
      servingSizeG:   typical serving size in grams,
    }
 
-   DBSCAN -1 items are included in the DB but BLOCKED from
-   automatic inclusion in private user plans (clinical auth required).
 ============================================================ */
 const FOOD_DATABASE = Object.freeze([
 
   /* ── CLUSTER 0: Volume / Hydration / Low-Density ───────────── */
   {
     id: 'spinach_raw', name: 'תרד טרי', nameEn: 'Spinach raw',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 23, protein: 2.9, fat: 0.4, carbs: 3.6, fiber: 2.2, sugar: 0.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 80,
   },
   {
     id: 'romaine_lettuce', name: 'חסה רומנית', nameEn: 'Romaine lettuce',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 17, protein: 1.2, fat: 0.3, carbs: 3.3, fiber: 2.1, sugar: 1.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 80,
   },
   {
     id: 'cucumber', name: 'מלפפון', nameEn: 'Cucumber',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 15, protein: 0.7, fat: 0.1, carbs: 3.6, fiber: 0.5, sugar: 1.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   {
     id: 'tomato', name: 'עגבנייה', nameEn: 'Tomato',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 18, protein: 0.9, fat: 0.2, carbs: 3.9, fiber: 1.2, sugar: 2.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   {
     id: 'apple', name: 'תפוח עץ', nameEn: 'Apple',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 52, protein: 0.3, fat: 0.2, carbs: 13.8, fiber: 2.4, sugar: 10.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'banana', name: 'בננה', nameEn: 'Banana',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 89, protein: 1.1, fat: 0.3, carbs: 22.8, fiber: 2.6, sugar: 12.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   {
     id: 'watermelon', name: 'אבטיח', nameEn: 'Watermelon',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 30, protein: 0.6, fat: 0.2, carbs: 7.6, fiber: 0.4, sugar: 6.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   {
     id: 'orange', name: 'תפוז', nameEn: 'Orange',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 47, protein: 0.9, fat: 0.1, carbs: 11.8, fiber: 2.4, sugar: 9.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 130,
   },
   {
     id: 'strawberry', name: 'תות שדה', nameEn: 'Strawberry',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 32, protein: 0.7, fat: 0.3, carbs: 7.7, fiber: 2.0, sugar: 4.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'blueberry', name: 'אוכמניות', nameEn: 'Blueberry',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 57, protein: 0.7, fat: 0.3, carbs: 14.5, fiber: 2.4, sugar: 10.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   {
     id: 'carrot', name: 'גזר', nameEn: 'Carrot',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 41, protein: 0.9, fat: 0.2, carbs: 9.6, fiber: 2.8, sugar: 4.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   {
     id: 'broccoli', name: 'ברוקולי', nameEn: 'Broccoli',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 34, protein: 2.8, fat: 0.4, carbs: 6.6, fiber: 2.6, sugar: 1.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   {
     id: 'zucchini', name: 'קישוא', nameEn: 'Zucchini',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 17, protein: 1.2, fat: 0.3, carbs: 3.1, fiber: 1.0, sugar: 2.5 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'chicken_broth_clear', name: 'מרק עוף צלול', nameEn: 'Clear chicken broth',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 12, protein: 1.4, fat: 0.4, carbs: 0.9, fiber: 0.0, sugar: 0.3 },
     allergens: [], restrictions: ['kosher','gluten-free','lactose-free'],
     servingSizeG: 250,
   },
   {
     id: 'grapes', name: 'ענבים', nameEn: 'Grapes',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 67, protein: 0.6, fat: 0.4, carbs: 17.2, fiber: 0.9, sugar: 16.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
@@ -274,84 +270,84 @@ const FOOD_DATABASE = Object.freeze([
   /* ── CLUSTER 1: Lean Protein Core ──────────────────────────── */
   {
     id: 'chicken_breast', name: 'חזה עוף', nameEn: 'Chicken breast skinless',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 165, protein: 31.0, fat: 3.6, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: [], restrictions: ['kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'tuna_water', name: 'טונה במים', nameEn: 'Tuna canned in water',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 116, protein: 25.5, fat: 1.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   {
     id: 'cod_fillet', name: 'פילה קוד', nameEn: 'Cod fillet',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 82, protein: 17.8, fat: 0.7, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'egg_whites', name: 'חלבוני ביצה', nameEn: 'Egg whites',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 52, protein: 10.9, fat: 0.2, carbs: 0.7, fiber: 0.0, sugar: 0.7 },
     allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   {
     id: 'turkey_breast', name: 'חזה הודו', nameEn: 'Turkey breast',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 135, protein: 29.9, fat: 1.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: [], restrictions: ['kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'salmon_fillet', name: 'פילה סלמון', nameEn: 'Salmon fillet',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 208, protein: 20.0, fat: 13.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'low_fat_cottage', name: 'גבינת קוטג׳ 5%', nameEn: 'Low fat cottage cheese',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 72, protein: 11.0, fat: 1.8, carbs: 3.4, fiber: 0.0, sugar: 3.4 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 150,
   },
   {
     id: 'greek_yogurt_0', name: 'יוגורט יווני 0%', nameEn: 'Greek yogurt 0% fat',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 59, protein: 10.2, fat: 0.4, carbs: 3.6, fiber: 0.0, sugar: 3.2 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 200,
   },
   {
     id: 'lentils_cooked', name: 'עדשים מבושלות', nameEn: 'Lentils cooked',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 116, protein: 9.0, fat: 0.4, carbs: 20.1, fiber: 7.9, sugar: 1.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   {
     id: 'chickpeas_cooked', name: 'חומוס מבושל', nameEn: 'Chickpeas cooked',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 164, protein: 8.9, fat: 2.6, carbs: 27.4, fiber: 7.6, sugar: 4.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'tofu_firm', name: 'טופו קשה', nameEn: 'Firm tofu',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 144, protein: 17.3, fat: 8.7, carbs: 2.8, fiber: 0.3, sugar: 0.9 },
     allergens: ['soy'], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'whole_egg', name: 'ביצה שלמה', nameEn: 'Whole egg',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 155, protein: 12.6, fat: 10.6, carbs: 1.1, fiber: 0.0, sugar: 1.1 },
     allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
     servingSizeG: 55,
@@ -360,63 +356,63 @@ const FOOD_DATABASE = Object.freeze([
   /* ── CLUSTER 2: Essential Fats / Dense Energy ───────────────── */
   {
     id: 'olive_oil', name: 'שמן זית', nameEn: 'Olive oil extra virgin',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 10,
   },
   {
     id: 'avocado', name: 'אבוקדו', nameEn: 'Avocado',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 160, protein: 2.0, fat: 14.7, carbs: 8.5, fiber: 6.7, sugar: 0.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   {
     id: 'walnuts', name: 'אגוזי מלך', nameEn: 'Walnuts',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 654, protein: 15.2, fat: 65.2, carbs: 13.7, fiber: 6.7, sugar: 2.6 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   {
     id: 'almonds', name: 'שקדים', nameEn: 'Almonds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 579, protein: 21.2, fat: 49.9, carbs: 21.6, fiber: 12.5, sugar: 4.4 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   {
     id: 'tahini_raw', name: 'טחינה גולמית', nameEn: 'Raw tahini',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 595, protein: 17.0, fat: 53.8, carbs: 21.2, fiber: 9.3, sugar: 0.5 },
     allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 20,
   },
   {
     id: 'peanut_butter_natural', name: 'חמאת בוטנים טבעית', nameEn: 'Natural peanut butter',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 588, protein: 25.1, fat: 50.4, carbs: 20.1, fiber: 6.0, sugar: 8.4 },
     allergens: ['peanuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 32,
   },
   {
     id: 'cashews', name: 'קשיו', nameEn: 'Cashews',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 553, protein: 18.2, fat: 43.9, carbs: 30.2, fiber: 3.3, sugar: 5.9 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   {
     id: 'flaxseeds', name: 'זרעי פשתן', nameEn: 'Flaxseeds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 534, protein: 18.3, fat: 42.2, carbs: 28.9, fiber: 27.3, sugar: 1.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 15,
   },
   {
     id: 'chia_seeds', name: 'זרעי צ׳יה', nameEn: 'Chia seeds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 486, protein: 16.5, fat: 30.7, carbs: 42.1, fiber: 34.4, sugar: 0.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 20,
@@ -425,63 +421,63 @@ const FOOD_DATABASE = Object.freeze([
   /* ── CLUSTER 3: Complex Carbohydrates ───────────────────────── */
   {
     id: 'brown_rice_cooked', name: 'אורז מלא מבושל', nameEn: 'Brown rice cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 216, protein: 5.0, fat: 1.8, carbs: 44.8, fiber: 3.5, sugar: 0.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'quinoa_cooked', name: 'קינואה מבושלת', nameEn: 'Quinoa cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 120, protein: 4.4, fat: 1.9, carbs: 21.3, fiber: 2.8, sugar: 0.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'oats_rolled', name: 'שיבולת שועל (גרנולה)', nameEn: 'Rolled oats',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 389, protein: 16.9, fat: 6.9, carbs: 66.3, fiber: 10.6, sugar: 0.0 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 50,
   },
   {
     id: 'spelt_bread', name: 'לחם כוסמין', nameEn: 'Spelt bread',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 243, protein: 9.8, fat: 2.2, carbs: 46.7, fiber: 5.3, sugar: 4.1 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 60,
   },
   {
     id: 'sweet_potato_baked', name: 'בטטה אפויה', nameEn: 'Sweet potato baked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 90, protein: 2.0, fat: 0.1, carbs: 20.7, fiber: 3.3, sugar: 6.5 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   {
     id: 'whole_wheat_pita', name: 'פיתה מקמח מלא', nameEn: 'Whole wheat pita',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 265, protein: 9.1, fat: 1.2, carbs: 55.0, fiber: 4.4, sugar: 1.8 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 60,
   },
   {
     id: 'buckwheat_cooked', name: 'כוסמת מבושלת', nameEn: 'Buckwheat cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 92, protein: 3.4, fat: 0.6, carbs: 19.9, fiber: 2.7, sugar: 0.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'corn_cooked', name: 'תירס מבושל', nameEn: 'Corn cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 96, protein: 3.4, fat: 1.5, carbs: 21.0, fiber: 2.4, sugar: 4.5 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   {
     id: 'whole_pasta_cooked', name: 'פסטה מחיטה מלאה', nameEn: 'Whole wheat pasta cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 124, protein: 5.3, fat: 0.5, carbs: 26.5, fiber: 3.9, sugar: 0.6 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 180,
@@ -489,115 +485,115 @@ const FOOD_DATABASE = Object.freeze([
 
   /* ── CLUSTER 0: Additional Volume / Low-Density ─────────────── */
   { id: 'cherry_tomato', name: 'עגבניית שרי', nameEn: 'Cherry tomato',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 18, protein: 0.9, fat: 0.2, carbs: 3.9, fiber: 1.2, sugar: 2.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'cabbage_raw', name: 'כרוב טרי', nameEn: 'Cabbage raw',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 25, protein: 1.3, fat: 0.1, carbs: 5.8, fiber: 2.5, sugar: 3.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'cauliflower', name: 'כרובית', nameEn: 'Cauliflower',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 25, protein: 1.9, fat: 0.3, carbs: 5.0, fiber: 2.0, sugar: 1.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'red_bell_pepper', name: 'גמבה אדומה', nameEn: 'Red bell pepper',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 31, protein: 1.0, fat: 0.3, carbs: 6.0, fiber: 2.1, sugar: 4.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 130,
   },
   { id: 'onion_raw', name: 'בצל', nameEn: 'Onion raw',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 40, protein: 1.1, fat: 0.1, carbs: 9.3, fiber: 1.7, sugar: 4.2 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 80,
   },
   { id: 'beet_cooked', name: 'סלק מבושל', nameEn: 'Beet cooked',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 44, protein: 1.7, fat: 0.2, carbs: 10.0, fiber: 2.0, sugar: 7.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'pear', name: 'אגס', nameEn: 'Pear',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 57, protein: 0.4, fat: 0.1, carbs: 15.2, fiber: 3.1, sugar: 9.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 160,
   },
   { id: 'kiwi', name: 'קיווי', nameEn: 'Kiwi fruit',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 61, protein: 1.1, fat: 0.5, carbs: 14.7, fiber: 3.0, sugar: 9.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'mango', name: 'מנגו', nameEn: 'Mango',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 60, protein: 0.8, fat: 0.4, carbs: 15.0, fiber: 1.6, sugar: 13.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'melon', name: 'מלון', nameEn: 'Cantaloupe melon',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 34, protein: 0.8, fat: 0.2, carbs: 8.2, fiber: 0.9, sugar: 7.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'celery', name: 'סלרי', nameEn: 'Celery',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 14, protein: 0.7, fat: 0.2, carbs: 3.0, fiber: 1.6, sugar: 1.3 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'plum', name: 'שזיף', nameEn: 'Plum',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 46, protein: 0.7, fat: 0.3, carbs: 11.4, fiber: 1.4, sugar: 9.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   { id: 'kohlrabi', name: 'קולרבי', nameEn: 'Kohlrabi',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 27, protein: 1.7, fat: 0.1, carbs: 6.2, fiber: 3.6, sugar: 2.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   { id: 'parsley_fresh', name: 'פטרוזיליה', nameEn: 'Parsley fresh',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 36, protein: 3.0, fat: 0.8, carbs: 6.3, fiber: 3.3, sugar: 0.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 20,
   },
   { id: 'spinach_frozen', name: 'תרד קפוא', nameEn: 'Spinach frozen',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 21, protein: 2.4, fat: 0.3, carbs: 3.0, fiber: 2.0, sugar: 0.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'almond_milk_unsweetened', name: 'חלב שקדים ללא סוכר', nameEn: 'Unsweetened almond milk',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 17, protein: 0.6, fat: 1.4, carbs: 0.6, fiber: 0.4, sugar: 0.0 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 250,
   },
   { id: 'persimmon', name: 'אפרסמון', nameEn: 'Persimmon',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 70, protein: 0.6, fat: 0.2, carbs: 18.6, fiber: 3.6, sugar: 12.5 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'fig_fresh', name: 'תאנה טרייה', nameEn: 'Fresh fig',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 74, protein: 0.8, fat: 0.3, carbs: 19.2, fiber: 2.9, sugar: 16.3 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 50,
   },
   { id: 'purple_cabbage', name: 'כרוב סגול', nameEn: 'Purple cabbage',
-    cluster: 0, dbscan: 0,
+    cluster: 0,
     per100g: { calories: 31, protein: 1.4, fat: 0.2, carbs: 7.4, fiber: 2.1, sugar: 3.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
@@ -605,115 +601,115 @@ const FOOD_DATABASE = Object.freeze([
 
   /* ── CLUSTER 1: Additional Lean Protein ─────────────────────── */
   { id: 'milk_1pct', name: 'חלב 1% שומן', nameEn: 'Milk 1% fat',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 46, protein: 3.4, fat: 1.0, carbs: 4.9, fiber: 0.0, sugar: 4.9 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 240,
   },
   { id: 'sardines_water', name: 'סרדינים במים', nameEn: 'Sardines in water',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 115, protein: 24.6, fat: 1.4, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'sea_bass_fillet', name: 'פילה לברק', nameEn: 'Sea bass fillet',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 97, protein: 18.4, fat: 2.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'white_beans_cooked', name: 'שעועית לבנה מבושלת', nameEn: 'White beans cooked',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 127, protein: 8.8, fat: 0.3, carbs: 22.5, fiber: 6.3, sugar: 0.3 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'white_cheese_5pct', name: 'גבינה לבנה 5%', nameEn: 'White soft cheese 5%',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 87, protein: 10.6, fat: 5.0, carbs: 1.2, fiber: 0.0, sugar: 1.2 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 150,
   },
   { id: 'liquid_egg_white', name: 'חלבון ביצה נוזלי', nameEn: 'Liquid egg whites',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 52, protein: 10.9, fat: 0.2, carbs: 0.7, fiber: 0.0, sugar: 0.7 },
     allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'mullet_fillet', name: 'פילה מוסר ים', nameEn: 'Mullet fish fillet',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 117, protein: 19.3, fat: 3.8, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'tilapia_fillet', name: 'פילה אמנון', nameEn: 'Tilapia fillet',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 96, protein: 20.1, fat: 1.7, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'yellow_cheese_9pct', name: 'גבינה צהובה 9%', nameEn: 'Yellow cheese 9% fat',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 160, protein: 18.0, fat: 9.0, carbs: 1.5, fiber: 0.0, sugar: 1.5 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 30,
   },
   { id: 'bulgarian_cheese_5pct', name: 'גבינה בולגרית 5%', nameEn: 'Bulgarian cheese 5%',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 87, protein: 11.5, fat: 5.0, carbs: 0.5, fiber: 0.0, sugar: 0.5 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 60,
   },
   { id: 'hummus_spread', name: 'חומוס ממרח ביתי', nameEn: 'Hummus spread homemade',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 177, protein: 8.0, fat: 9.6, carbs: 14.3, fiber: 4.0, sugar: 0.3 },
     allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 80,
   },
   { id: 'shrimp_cooked', name: 'שרימפס מבושל', nameEn: 'Shrimp cooked',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 99, protein: 20.9, fat: 1.1, carbs: 0.9, fiber: 0.0, sugar: 0.0 },
     allergens: ['shellfish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 120,
   },
   { id: 'beef_lean_5pct', name: 'בשר בקר טחון 5% שומן', nameEn: 'Lean ground beef 5%',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 164, protein: 22.0, fat: 7.8, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: [], restrictions: ['kosher','gluten-free','lactose-free'],
     servingSizeG: 130,
   },
   { id: 'edamame_cooked', name: 'אדממה מבושלת', nameEn: 'Edamame cooked',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 121, protein: 11.9, fat: 5.2, carbs: 8.9, fiber: 5.2, sugar: 2.2 },
     allergens: ['soy'], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'baked_chicken_schnitzel', name: 'שניצל עוף אפוי', nameEn: 'Baked chicken schnitzel',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 162, protein: 24.0, fat: 4.5, carbs: 5.0, fiber: 0.5, sugar: 0.3 },
     allergens: ['gluten','eggs'], restrictions: ['kosher','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'tempeh', name: 'טמפה', nameEn: 'Tempeh',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 192, protein: 20.3, fat: 11.4, carbs: 7.6, fiber: 0.0, sugar: 0.0 },
     allergens: ['soy'], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'canned_mackerel', name: 'מקרל בשימורים', nameEn: 'Canned mackerel',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 156, protein: 19.4, fat: 8.6, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['fish'], restrictions: ['gluten-free','lactose-free'],
     servingSizeG: 100,
   },
   { id: 'cottage_cheese_9pct', name: 'גבינת קוטג׳ 9%', nameEn: 'Cottage cheese 9% fat',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 115, protein: 11.0, fat: 4.5, carbs: 3.4, fiber: 0.0, sugar: 3.4 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 150,
   },
   { id: 'vegetable_shakshuka', name: 'שקשוקה ירקות', nameEn: 'Vegetable shakshuka',
-    cluster: 1, dbscan: 0,
+    cluster: 1,
     per100g: { calories: 60, protein: 3.0, fat: 3.5, carbs: 5.0, fiber: 1.5, sugar: 3.0 },
     allergens: ['eggs'], restrictions: ['vegetarian','kosher','gluten-free','lactose-free'],
     servingSizeG: 250,
@@ -721,61 +717,61 @@ const FOOD_DATABASE = Object.freeze([
 
   /* ── CLUSTER 2: Additional Essential Fats ───────────────────── */
   { id: 'sunflower_seeds', name: 'גרעיני חמנייה', nameEn: 'Sunflower seeds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 584, protein: 20.8, fat: 51.5, carbs: 20.0, fiber: 8.6, sugar: 2.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'pumpkin_seeds', name: 'גרעיני דלעת', nameEn: 'Pumpkin seeds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 559, protein: 30.2, fat: 49.1, carbs: 10.7, fiber: 6.0, sugar: 1.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'almond_butter', name: 'ממרח שקדים טבעי', nameEn: 'Natural almond butter',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 614, protein: 20.9, fat: 55.5, carbs: 18.8, fiber: 10.3, sugar: 4.4 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 32,
   },
   { id: 'peanuts_raw', name: 'בוטנים גולמיים', nameEn: 'Raw peanuts',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 567, protein: 25.8, fat: 49.2, carbs: 16.1, fiber: 8.5, sugar: 4.7 },
     allergens: ['peanuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'brazil_nuts', name: 'אגוז ברזיל', nameEn: 'Brazil nuts',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 656, protein: 14.3, fat: 66.4, carbs: 11.7, fiber: 7.5, sugar: 3.3 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'sesame_oil', name: 'שמן שומשום', nameEn: 'Sesame oil',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
     allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 7,
   },
   { id: 'coconut_shredded', name: 'קוקוס מגורד', nameEn: 'Shredded coconut unsweetened',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 660, protein: 6.9, fat: 64.5, carbs: 23.7, fiber: 16.3, sugar: 6.9 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 20,
   },
   { id: 'pecan', name: 'פקאן', nameEn: 'Pecans',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 691, protein: 9.2, fat: 72.0, carbs: 13.9, fiber: 9.6, sugar: 3.9 },
     allergens: ['tree-nuts'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'dark_chocolate_85', name: 'שוקולד מריר 85%', nameEn: 'Dark chocolate 85%',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 598, protein: 8.5, fat: 42.6, carbs: 45.9, fiber: 10.9, sugar: 24.2 },
     allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
     servingSizeG: 20,
   },
   { id: 'hemp_seeds', name: 'זרעי המפ', nameEn: 'Hemp seeds',
-    cluster: 2, dbscan: 0,
+    cluster: 2,
     per100g: { calories: 553, protein: 31.6, fat: 48.7, carbs: 8.7, fiber: 4.0, sugar: 1.5 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
@@ -783,160 +779,108 @@ const FOOD_DATABASE = Object.freeze([
 
   /* ── CLUSTER 3: Additional Complex Carbohydrates ─────────────── */
   { id: 'rye_bread', name: 'לחם שיפון מלא', nameEn: 'Whole grain rye bread',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 259, protein: 8.5, fat: 3.3, carbs: 48.3, fiber: 5.8, sugar: 3.3 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 60,
   },
   { id: 'couscous_cooked', name: 'קוסקוס מבושל', nameEn: 'Couscous cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 112, protein: 3.8, fat: 0.2, carbs: 23.2, fiber: 1.4, sugar: 0.1 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'potato_boiled', name: 'תפוח אדמה מבושל', nameEn: 'Boiled potato',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 78, protein: 1.9, fat: 0.1, carbs: 17.8, fiber: 2.4, sugar: 0.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'basmati_rice_cooked', name: 'אורז בסמטי מבושל', nameEn: 'Basmati rice cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 121, protein: 2.7, fat: 0.4, carbs: 25.2, fiber: 0.4, sugar: 0.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'polenta_cooked', name: 'פולנטה מבושלת', nameEn: 'Polenta cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 70, protein: 1.6, fat: 0.7, carbs: 15.6, fiber: 0.7, sugar: 0.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'barley_cooked', name: 'שעורה מבושלת', nameEn: 'Barley cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 123, protein: 2.3, fat: 0.4, carbs: 28.2, fiber: 3.8, sugar: 0.3 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'black_lentils_cooked', name: 'עדשים שחורות מבושלות', nameEn: 'Black lentils cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 101, protein: 8.0, fat: 0.4, carbs: 17.0, fiber: 7.0, sugar: 1.6 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'fava_beans_cooked', name: 'פול מבושל', nameEn: 'Fava beans cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 110, protein: 7.6, fat: 0.4, carbs: 19.7, fiber: 5.4, sugar: 1.8 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 200,
   },
   { id: 'green_peas_cooked', name: 'אפונה ירוקה מבושלת', nameEn: 'Green peas cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 84, protein: 5.4, fat: 0.4, carbs: 15.6, fiber: 5.5, sugar: 5.7 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'whole_wheat_bread', name: 'לחם מחיטה מלאה', nameEn: 'Whole wheat bread',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 247, protein: 12.6, fat: 3.4, carbs: 41.3, fiber: 7.0, sugar: 5.2 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 60,
   },
   { id: 'white_rice_cooked', name: 'אורז לבן מבושל', nameEn: 'White rice cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 130, protein: 2.7, fat: 0.3, carbs: 28.2, fiber: 0.4, sugar: 0.0 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 150,
   },
   { id: 'oatmeal_cooked', name: 'דייסת שיבולת שועל', nameEn: 'Oatmeal cooked',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 71, protein: 2.5, fat: 1.4, carbs: 12.0, fiber: 1.7, sugar: 0.0 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 250,
   },
   { id: 'whole_grain_cornflakes', name: 'קורנפלקס מחיטה מלאה', nameEn: 'Whole grain cornflakes',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 356, protein: 8.5, fat: 3.6, carbs: 72.0, fiber: 9.0, sugar: 8.0 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 40,
   },
   { id: 'muesli_natural', name: 'מוזלי טבעי', nameEn: 'Natural muesli',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 368, protein: 9.4, fat: 6.3, carbs: 69.0, fiber: 7.0, sugar: 14.0 },
     allergens: ['gluten','tree-nuts'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 50,
   },
   { id: 'dates_dried', name: 'תמרים יבשים', nameEn: 'Dried dates Medjool',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 282, protein: 2.5, fat: 0.4, carbs: 75.0, fiber: 8.0, sugar: 63.4 },
     allergens: [], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 30,
   },
   { id: 'tortilla_whole_wheat', name: 'טורטייה מחיטה מלאה', nameEn: 'Whole wheat tortilla',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 218, protein: 6.0, fat: 4.0, carbs: 39.0, fiber: 3.0, sugar: 1.8 },
     allergens: ['gluten'], restrictions: ['vegetarian','vegan','kosher','lactose-free'],
     servingSizeG: 40,
   },
   { id: 'baked_falafel', name: 'פלאפל אפוי', nameEn: 'Baked falafel',
-    cluster: 3, dbscan: 0,
+    cluster: 3,
     per100g: { calories: 180, protein: 9.0, fat: 8.0, carbs: 18.0, fiber: 5.0, sugar: 1.2 },
     allergens: ['sesame'], restrictions: ['vegetarian','vegan','kosher','gluten-free','lactose-free'],
     servingSizeG: 100,
   },
 
-  /* ── DBSCAN -1: OUTLIERS — BLOCKED FOR PRIVATE USERS ─────────
-     These items require explicit clinical authorization.
-     They appear in the DB for dietitian-mode reference only.
-  ──────────────────────────────────────────────────────────── */
-  {
-    id: 'whey_isolate_90', name: 'אבקת חלבון ווי 90%', nameEn: 'Whey protein isolate 90%',
-    cluster: 1, dbscan: -1,
-    per100g: { calories: 370, protein: 90.0, fat: 1.0, carbs: 4.0, fiber: 0.0, sugar: 1.5 },
-    allergens: ['dairy'], restrictions: ['kosher','gluten-free'],
-    servingSizeG: 30,
-    dbscanNote: 'חלבון בודד תעשייתי >80g/100g — דורש אישור תזונאי',
-  },
-  {
-    id: 'palm_oil_refined', name: 'שמן דקלים מזוקק', nameEn: 'Refined palm oil',
-    cluster: 2, dbscan: -1,
-    per100g: { calories: 884, protein: 0.0, fat: 100.0, carbs: 0.0, fiber: 0.0, sugar: 0.0 },
-    allergens: [], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
-    servingSizeG: 10,
-    dbscanNote: 'שמן תעשייתי מזוקק — חסום אוטומטית',
-  },
-  {
-    id: 'refined_glucose_syrup', name: 'סירופ גלוקוז מזוקק', nameEn: 'Refined glucose syrup',
-    cluster: 3, dbscan: -1,
-    per100g: { calories: 316, protein: 0.0, fat: 0.0, carbs: 81.3, fiber: 0.0, sugar: 81.3 },
-    allergens: [], restrictions: ['vegetarian','vegan','gluten-free','lactose-free'],
-    servingSizeG: 20,
-    dbscanNote: 'סוכר מזוקק תעשייתי — חסום אוטומטית',
-  },
-  {
-    id: 'mass_gainer_powder', name: 'אבקת מאס גיינר', nameEn: 'Mass gainer powder',
-    cluster: 3, dbscan: -1,
-    per100g: { calories: 390, protein: 15.0, fat: 5.0, carbs: 73.0, fiber: 1.0, sugar: 22.0 },
-    allergens: ['dairy','gluten'], restrictions: [],
-    servingSizeG: 100,
-    dbscanNote: 'תוסף תעשייתי לעלייה במסה — דורש אישור תזונאי',
-  },
-  {
-    id: 'industrial_margarine', name: 'מרגרינה תעשייתית (טרנס)', nameEn: 'Industrial margarine trans fats',
-    cluster: 2, dbscan: -1,
-    per100g: { calories: 719, protein: 0.9, fat: 79.0, carbs: 1.0, fiber: 0.0, sugar: 0.0 },
-    allergens: ['dairy'], restrictions: [],
-    servingSizeG: 10,
-    dbscanNote: 'שומן טרנס תעשייתי — חסום אוטומטית, סיכון קרדיווסקולרי',
-  },
-  {
-    id: 'sweetened_condensed_milk', name: 'חלב מרוכז ממותק', nameEn: 'Sweetened condensed milk',
-    cluster: 3, dbscan: -1,
-    per100g: { calories: 321, protein: 7.9, fat: 8.7, carbs: 54.4, fiber: 0.0, sugar: 54.4 },
-    allergens: ['dairy'], restrictions: ['vegetarian','kosher','gluten-free'],
-    servingSizeG: 30,
-    dbscanNote: 'ריכוז סוכר קיצוני (54g/100g) — חסום אוטומטית לפרופיל פרטי',
-  },
 ]);
 
 /* ============================================================
@@ -1200,17 +1144,15 @@ function cosineSimilarity(vecA, vecB) {
  *
  * CRITICAL CONSTRAINTS enforced here:
  *   1. Cross-cluster substitution is ARCHITECTURALLY PREVENTED.
- *   2. DBSCAN -1 items are excluded unless clinical mode is active.
- *   3. The source item itself is excluded from results.
- *   4. Items conflicting with user allergies/restrictions are excluded.
+ *   2. The source item itself is excluded from results.
+ *   3. Items conflicting with user allergies/restrictions are excluded.
  *
  * @param {string}   sourceItemId     — ID of the item to replace
- * @param {object}   userProfile      — { allergies[], restrictions[], mode }
+ * @param {object}   userProfile      — { allergies[], restrictions[] }
  * @param {number}   topN             — number of candidates to return (default 3)
- * @param {boolean}  clinicalMode     — if true, DBSCAN -1 items are allowed
  * @returns {Array<{ item: object, score: number }>} sorted descending by score
  */
-function findSwapCandidates(sourceItemId, userProfile, topN = 3, clinicalMode = false) {
+function findSwapCandidates(sourceItemId, userProfile, topN = 3) {
   const sourceItem = FOOD_DATABASE.find(f => f.id === sourceItemId);
   if (!sourceItem) {
     console.warn(`[SwapEngine] Source item not found: ${sourceItemId}`);
@@ -1220,11 +1162,9 @@ function findSwapCandidates(sourceItemId, userProfile, topN = 3, clinicalMode = 
   const sourceCluster = sourceItem.cluster;
   const sourceVector  = getNutritionalVector(sourceItem);
 
-  // Filter candidates: same cluster, not the source, not DBSCAN -1 (unless clinical)
   const candidates = FOOD_DATABASE.filter(item => {
     if (item.id === sourceItemId)         return false; // exclude self
     if (item.cluster !== sourceCluster)   return false; // CROSS-CLUSTER PREVENTION
-    if (!clinicalMode && item.dbscan < 0) return false; // DBSCAN guardrail
 
     // Allergen check
     if (userProfile.allergies && userProfile.allergies.length > 0) {
@@ -1462,10 +1402,7 @@ class NutriAgentFSM {
     const greeting = [
       '🌿 **ברוכים הבאים ל-NutriAgent**',
       '',
-      'אני מערכת בינה מלאכותית לתמיכה תזונתית, מיועדת למשתמשים פרטיים ולדיאטניות קליניות.',
-      '',
-      '🔵 **מצב פרטי** — ממשק שיחה לקבלת תפריט מותאם אישית',
-      '🟣 **מצב קליני** — תצוגת נתונים גולמיים: BMR מדויק, אשכולות K-Means, מקרו-נוטריאנטים',
+      'אני מערכת בינה מלאכותית לתמיכה תזונתית אישית, מיועדת למשתמשים פרטיים.',
       '',
       '⚕️ **הצהרה:** מערכת זו היא כלי תמיכה ואינה מהווה תחליף לייעוץ דיאטנ/ית מוסמך/ת.',
       '',
@@ -1845,7 +1782,7 @@ class NutriAgentFSM {
       this.state = FSM_STATES.GENERATING;
       return this._response(
         `מעולה! ${genderInflect(this.profile.detectedGender || this.profile.gender, 'מתחיל', 'מתחילה')} ליצור את תוכנית הארוחות עבורך…\n` +
-        '🧬 מפעיל מנוע K-Means ו-DBSCAN…\n' +
+        '🧬 מפעיל מנוע K-Means…\n' +
         '⚙️ מחשב פרמטרים תזונתיים…\n' +
         '🤖 שולח נתונים ל-Groq…',
         { type: 'generating', triggerGeneration: true }
@@ -1918,40 +1855,39 @@ class NutriAgentFSM {
     this._clearProfileField(targetState);
 
     const fieldPrompts = {
-      [FSM_STATES.AGE]:          'מה גילך? (16+)',
-      [FSM_STATES.GENDER]:       'מה המין? (זכר / נקבה)',
-      [FSM_STATES.WEIGHT]:       'מה המשקל החדש? (בק"ג)',
-      [FSM_STATES.HEIGHT]:       'מה הגובה החדש? (בס"מ)',
-      [FSM_STATES.ACTIVITY]:     'מה רמת הפעילות? (נמוכה / בינונית / גבוהה)',
-      [FSM_STATES.ALLERGIES]:    'האלרגיות החדשות? (רשימה מופרדת בפסיקים, או "אין")',
-      [FSM_STATES.DISLIKES]:     'מה המאכלים שאינם אהובים? (או "אין")',
-      [FSM_STATES.RESTRICTIONS]: 'מה ההגבלות התזונתיות? (או "אין")',
+      [FSM_STATES.AGE]:          { text: 'מה גילך? (16+)',                                          quickChips: ['20', '25', '30', '35', '40', '50'] },
+      [FSM_STATES.GENDER]:       { text: 'מה המין?',                                                quickChips: ['זכר', 'נקבה'] },
+      [FSM_STATES.WEIGHT]:       { text: 'מה המשקל החדש? (בק"ג)',                                   quickChips: ['50', '60', '70', '80', '90', '100'] },
+      [FSM_STATES.HEIGHT]:       { text: 'מה הגובה החדש? (בס"מ)',                                   quickChips: ['155', '160', '165', '170', '175', '180'] },
+      [FSM_STATES.ACTIVITY]:     { text: 'מה רמת הפעילות?',                                         quickChips: ['נמוכה', 'בינונית', 'גבוהה'] },
+      [FSM_STATES.ALLERGIES]:    { text: 'האלרגיות החדשות? (מופרדות בפסיק, או "אין")',              quickChips: ['אין', 'בוטנים', 'חלב', 'גלוטן', 'ביצים'] },
+      [FSM_STATES.DISLIKES]:     { text: 'מה המאכלים שאינם אהובים? (מופרדים בפסיק, או "אין")',     quickChips: ['אין'] },
+      [FSM_STATES.RESTRICTIONS]: { text: 'מה ההגבלות התזונתיות? (או "אין")',                        quickChips: ['אין', 'ללא גלוטן', 'ללא לקטוז', 'טבעוני', 'צמחוני'] },
     };
 
-    return this._response(fieldPrompts[targetState] || 'הזן את הערך החדש:', { type: 'edit' });
+    const prompt = fieldPrompts[targetState] || { text: 'הזן את הערך החדש:', quickChips: [] };
+    return this._response(prompt.text, { type: 'edit', quickChips: prompt.quickChips });
   }
 
   _handleEditingField(input) {
-    // Re-route input through the appropriate handler,
-    // then return to SUMMARY after field is updated.
+    // Re-route input through the appropriate handler for the field being edited.
+    // If the handler accepts the value (i.e. state advances away from the field),
+    // return to SUMMARY. If validation fails, the handler stays on the same field
+    // state — keep EDITING_FIELD so the user can retry.
     const field = this._pendingEditField;
     this.state = field;
     const response = this.process(input);
 
-    // After the field handler runs, restore state to SUMMARY
-    // unless the handler itself moved to another collection state
     return Promise.resolve(response).then(resp => {
-      // If we're past the field state (it was valid), go to summary
-      const collectionStates = [
-        FSM_STATES.AGE, FSM_STATES.GENDER, FSM_STATES.WEIGHT,
-        FSM_STATES.HEIGHT, FSM_STATES.ACTIVITY, FSM_STATES.ALLERGIES,
-        FSM_STATES.DISLIKES, FSM_STATES.RESTRICTIONS,
-      ];
-      if (!collectionStates.includes(this.state)) {
+      if (this.state !== field) {
+        // Value accepted — always go back to summary regardless of which
+        // state the field handler advanced to next.
         this.state = FSM_STATES.SUMMARY;
         this._pendingEditField = null;
-        // Append a return-to-summary indicator
         resp._returnToSummary = true;
+      } else {
+        // Validation failed — stay in EDITING_FIELD so user can retry.
+        this.state = FSM_STATES.EDITING_FIELD;
       }
       return resp;
     });
@@ -2037,12 +1973,6 @@ class NutriAgentFSM {
   /** Returns the current FSM state string. */
   getState() { return this.state; }
 
-  /** Sets clinical mode (affects DBSCAN guardrail in swap engine). */
-  setClinicalMode(enabled) {
-    this.clinicalMode = !!enabled;
-    this.profile.mode = enabled ? 'clinical' : 'private';
-  }
-
   /** Called by UI when a meal plan is successfully generated & rendered. */
   onPlanGenerated(planJson) {
     this.generatedPlan = planJson;
@@ -2062,12 +1992,22 @@ class NutriAgentFSM {
    * @returns {Array<{ item, score }>}
    */
   getSwapCandidates(sourceItemId, topN = 3) {
-    return findSwapCandidates(
-      sourceItemId,
-      this.profile,
-      topN,
-      this.clinicalMode
-    );
+    return findSwapCandidates(sourceItemId, this.profile, topN);
+  }
+
+  getClusterCandidates(clusterIdx, topN = 3) {
+    const profile = this.getProfile();
+    const candidates = FOOD_DATABASE.filter(item => {
+      if (item.cluster !== clusterIdx) return false;
+      if (profile.allergies?.length > 0) {
+        const norm = profile.allergies.map(a => a.toLowerCase());
+        if (item.allergens.some(a => norm.includes(a.toLowerCase()))) return false;
+      }
+      return true;
+    });
+    // Deterministic shuffle by id sort to avoid random
+    const shuffled = [...candidates].sort((a, b) => a.id > b.id ? 1 : -1);
+    return shuffled.slice(0, topN).map(item => ({ item, score: 0.75 }));
   }
 
   /**
@@ -2202,5 +2142,4 @@ console.log(
   'color:#4ade80;font-weight:bold;font-size:14px',
   '| States:', Object.keys(FSM_STATES).length,
   '| Food DB items:', FOOD_DATABASE.length,
-  '| DBSCAN -1 blocked:', FOOD_DATABASE.filter(f => f.dbscan < 0).length,
 );
