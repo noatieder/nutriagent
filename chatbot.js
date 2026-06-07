@@ -2050,50 +2050,104 @@ class NutriAgentFSM {
 
 /* ============================================================
    SECTION 14 — DIETARY COMPLIANCE VALIDATOR
-   Post-generation scan: checks the AI-returned JSON for
-   violations against user's gluten-free / lactose-free tags.
-   Called by groqclient.js before rendering.
+   Comprehensive post-generation scan. Checks all restrictions:
+   gluten, lactose, vegan, vegetarian, allergens, calorie sum,
+   protein variety. Violations trigger automatic retry.
 ============================================================ */
 
-const GLUTEN_KEYWORDS   = ['חיטה','שיבולת','לחם','פיתה','פסטה','קוסקוס','סולת','עוגה','עוגיה','קמח','לביבה','פנקייק','קרקר','מצה','בורגול'];
-const LACTOSE_KEYWORDS  = ['חלב','גבינה','יוגורט','שמנת','קצפת','חמאה','מוצרלה','פרמזן','בולגרית','צהובה','קשקבל','גבינת'];
+const GLUTEN_KEYWORDS  = ['חיטה','שיבולת שועל','לחם','פיתה','פסטה','קוסקוס','סולת','עוגה','עוגיה','קמח','לביבה','פנקייק','קרקר','מצה','בורגול','כוסמין'];
+const LACTOSE_KEYWORDS = ['חלב','גבינה','יוגורט','שמנת','קצפת','חמאה','מוצרלה','פרמזן','בולגרית','קשקבל','קוטג'];
+const MEAT_KEYWORDS    = ['עוף','חזה עוף','שניצל','הודו','בקר','כבש','טלה','חזיר','אווז'];
+const FISH_KEYWORDS    = ['סלמון','טונה','קוד','לברק','אמנון','מוסר','סרדין','מקרל','שרימפס','דג ','דגים','פילה'];
+const EGG_KEYWORDS     = ['ביצה','ביצים','ביצ'];
+const MAIN_PROTEINS    = ['עוף','הודו','בקר','סלמון','טונה','קוד','לברק','אמנון','שרימפס','ביצ','טופו','עדשים','חומוס מבו'];
 
-/**
- * Validates a generated meal plan JSON against user restrictions.
- * Returns an object describing any violations found.
- *
- * @param {object} planJson   — the parsed API response JSON
- * @param {object} profile    — current user profile
- * @returns {{ valid: boolean, violations: string[] }}
- */
+// Allergen → keywords to detect in meal text
+const ALLERGEN_MAP = {
+  'דגים': FISH_KEYWORDS, 'fish': FISH_KEYWORDS,
+  'ביצים': EGG_KEYWORDS, 'eggs': EGG_KEYWORDS,
+  'חלב': LACTOSE_KEYWORDS, 'dairy': LACTOSE_KEYWORDS,
+  'גלוטן': GLUTEN_KEYWORDS, 'gluten': GLUTEN_KEYWORDS,
+  'אגוזים': ['אגוז','שקד','פקאן','קשיו','ברזיל','פיסטוק'], 'tree-nuts': ['אגוז','שקד','פקאן','קשיו','ברזיל'],
+  'בוטנים': ['בוטנ'], 'peanuts': ['בוטנ'],
+  'שומשום': ['שומשום','טחינה'], 'sesame': ['שומשום','טחינה'],
+  'סויה': ['סויה','טופו','אדממה','טמפה'], 'soy': ['סויה','טופו','אדממה','טמפה'],
+};
+
 function validateMealPlanCompliance(planJson, profile) {
   const violations = [];
   const restrictions = (profile.restrictions || []).map(r => r.toLowerCase());
-  const isGlutenFree   = restrictions.some(r => r.includes('גלוטן') || r === 'gluten-free');
-  const isLactoseFree  = restrictions.some(r => r.includes('לקטוז') || r === 'lactose-free');
+  const allergies    = (profile.allergies    || []).map(a => a.toLowerCase());
 
-  if (!isGlutenFree && !isLactoseFree) return { valid: true, violations: [] };
+  const isGlutenFree  = restrictions.some(r => r.includes('גלוטן') || r.includes('gluten'));
+  const isLactoseFree = restrictions.some(r => r.includes('לקטוז') || r.includes('lactose'));
+  const isVegan       = restrictions.some(r => r.includes('טבעוני') || r.includes('vegan'));
+  const isVegetarian  = restrictions.some(r => r.includes('צמחוני') || r.includes('vegetarian'));
 
-  const mealPlan = planJson?.meal_plan || {};
+  const mealPlan  = planJson?.meal_plan || {};
   const mealSlots = Object.entries(mealPlan);
+
+  // --- Calorie sum check ---
+  const mealCalSum = mealSlots.reduce((s, [, m]) => s + (Number(m.calories) || 0), 0);
+  if (mealCalSum > 0 && profile.caloricTarget) {
+    const diff = Math.abs(mealCalSum - profile.caloricTarget);
+    if (diff > profile.caloricTarget * 0.15) {
+      violations.push(`סכום קלוריות (${mealCalSum}) חורג ב-${Math.round(diff / profile.caloricTarget * 100)}% מהיעד (${profile.caloricTarget})`);
+    }
+  }
+
+  // --- Per-meal restriction checks ---
+  const proteinSlotsMap = {};
 
   for (const [slot, meal] of mealSlots) {
     const text = `${meal.name || ''} ${meal.description || ''}`.toLowerCase();
+    const slotLabel = slot;
 
     if (isGlutenFree) {
-      for (const keyword of GLUTEN_KEYWORDS) {
-        if (text.includes(keyword)) {
-          violations.push(`⚠️ ארוחת ${slot}: נמצא מרכיב גלוטן ("${keyword}") בניגוד להגבלה ללא גלוטן`);
-        }
+      for (const kw of GLUTEN_KEYWORDS) {
+        if (text.includes(kw)) violations.push(`גלוטן ב-${slotLabel}: "${kw}" אסור`);
+      }
+    }
+    if (isLactoseFree) {
+      for (const kw of LACTOSE_KEYWORDS) {
+        if (text.includes(kw)) violations.push(`לקטוז ב-${slotLabel}: "${kw}" אסור`);
+      }
+    }
+    if (isVegan) {
+      const veganBanned = [...MEAT_KEYWORDS, ...FISH_KEYWORDS, ...EGG_KEYWORDS, ...LACTOSE_KEYWORDS, 'דבש'];
+      for (const kw of veganBanned) {
+        if (text.includes(kw)) { violations.push(`טבעוני ב-${slotLabel}: "${kw}" אסור`); break; }
+      }
+    }
+    if (isVegetarian) {
+      for (const kw of [...MEAT_KEYWORDS, ...FISH_KEYWORDS]) {
+        if (text.includes(kw)) { violations.push(`צמחוני ב-${slotLabel}: "${kw}" אסור`); break; }
       }
     }
 
-    if (isLactoseFree) {
-      for (const keyword of LACTOSE_KEYWORDS) {
-        if (text.includes(keyword)) {
-          violations.push(`⚠️ ארוחת ${slot}: נמצא מרכיב לקטוז ("${keyword}") בניגוד להגבלה ללא לקטוז`);
+    // Allergen checks
+    for (const allergen of allergies) {
+      const keywords = ALLERGEN_MAP[allergen] || [];
+      for (const kw of keywords) {
+        if (text.includes(kw)) { violations.push(`אלרגיה (${allergen}) ב-${slotLabel}: "${kw}" אסור`); break; }
+      }
+    }
+
+    // Track main proteins for variety check (only main meals)
+    if (['breakfast','lunch','dinner'].includes(slot)) {
+      for (const protein of MAIN_PROTEINS) {
+        if (text.includes(protein)) {
+          if (!proteinSlotsMap[protein]) proteinSlotsMap[protein] = [];
+          proteinSlotsMap[protein].push(slot);
         }
       }
+    }
+  }
+
+  // --- Protein variety check ---
+  for (const [protein, slots] of Object.entries(proteinSlotsMap)) {
+    if (slots.length > 1) {
+      violations.push(`חלבון חוזר: "${protein}" מופיע ב-${slots.join(' + ')} — נדרש גיוון`);
     }
   }
 
