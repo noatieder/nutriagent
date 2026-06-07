@@ -70,7 +70,7 @@ const GROQ_CONFIG = Object.freeze({
    Groq keys start with "gsk_" and are 56 characters.
 ============================================================ */
 
-const HARDCODED_API_KEY = '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';
+const HARDCODED_API_KEY = '__GROQ_API_KEY__';
 
 const APIKeyManager = Object.freeze({
 
