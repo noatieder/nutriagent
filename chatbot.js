@@ -1457,7 +1457,7 @@ class NutriAgentFSM {
       `✅ גיל: **${age}**\n\n**מה המין הביולוגי?**\nאנא בחר: **זכר** או **נקבה**\n*(נדרש לחישוב BMR מדויק לפי Mifflin-St Jeor)*`,
       {
         quickChips: ['זכר', 'נקבה'],
-        profileUpdate: { age },
+        profileUpdate: { 'גיל': age },
       }
     );
   }
@@ -1492,7 +1492,7 @@ class NutriAgentFSM {
       `✅ מין: **${genderLabel}**\n\n**מה משקלך?** (בקילוגרמים)`,
       {
         quickChips: ['55', '65', '75', '85', '95', '110'],
-        profileUpdate: { gender: genderLabel },
+        profileUpdate: { 'מין': genderLabel },
       }
     );
   }
@@ -1518,7 +1518,7 @@ class NutriAgentFSM {
       `✅ משקל: **${weight} ק"ג**\n\n**מה גובהך?** (בסנטימטרים)`,
       {
         quickChips: ['155', '162', '168', '175', '182', '190'],
-        profileUpdate: { weight: `${weight} ק"ג` },
+        profileUpdate: { 'משקל': `${weight} ק"ג` },
       }
     );
   }
@@ -1588,7 +1588,7 @@ class NutriAgentFSM {
       bmiData: { bmi, bmiCategory, bmrBase: caloricData.bmrBase },
       quickChips: ['פעילות נמוכה', 'פעילות בינונית', 'פעילות גבוהה'],
       profileUpdate: {
-        height: `${height} ס"מ`,
+        'גובה': `${height} ס"מ`,
         'BMI': `${bmi} (${bmiCategory})`,
       },
     });
@@ -1754,7 +1754,16 @@ class NutriAgentFSM {
       type: 'summary',
       quickChips: ['המשך', 'עריכה'],
       profileUpdate: {
-        'הגבלות': restrictionsDisplay || 'אין',
+        'גיל':         String(p.age),
+        'מין':         genderLabel,
+        'משקל':        `${p.weight} ק"ג`,
+        'גובה':        `${p.height} ס"מ`,
+        'BMI':         `${p.bmi} (${p.bmiCategory})`,
+        'פעילות':      activityLabel,
+        'יעד קלורי':   `${p.caloricTarget} קק"ל/יום`,
+        'אלרגיות':     p.allergies?.join(', ') || 'אין',
+        'דחיות':       p.dislikes?.join(', ') || 'אין',
+        'הגבלות':      restrictionsDisplay || 'אין',
       },
       tagsUpdate: { type: 'restriction', items: this.profile.restrictions || [] },
     });

@@ -67,7 +67,6 @@ function resolveDOM() {
   DOM.bmiGaugeContainer   = document.getElementById('bmi-gauge-container');
   DOM.dietaryTagsSection  = document.getElementById('dietary-tags-section');
   DOM.dietaryTagsCloud    = document.getElementById('dietary-tags-cloud');
-  DOM.btnEditProfile   = document.getElementById('btn-edit-profile');
   // Sidebar — right (intel)
   DOM.swapHistoryList     = document.getElementById('swap-history-list');
   DOM.swapHistoryEmpty    = document.getElementById('swap-history-empty');
@@ -198,7 +197,6 @@ function bindEvents() {
   DOM.btnRestart.addEventListener('click', () => confirmRestart());
   DOM.topbarBrand.addEventListener('click', () => confirmRestart());
 
-  DOM.btnEditProfile?.addEventListener('click', reEditProfile);
 
   // Print button
   DOM.btnPrintPlan.addEventListener('click', () => window.print());
@@ -373,8 +371,6 @@ async function handleMealPlanGeneration() {
 
     showToast('🌿 תוכנית הארוחות נוצרה בהצלחה!', 'success');
 
-    // Show the profile edit button after plan is generated
-    if (DOM.btnEditProfile) DOM.btnEditProfile.style.display = '';
 
   } catch (err) {
     console.error('[NutriAgent] Generation error:', err);
@@ -1540,8 +1536,6 @@ function reEditProfile() {
     DOM.followupChatSection.setAttribute('aria-hidden', 'true');
   }
 
-  // Hide the edit button
-  if (DOM.btnEditProfile) DOM.btnEditProfile.style.display = 'none';
 
   UIState.currentPlanJson = null;
   UIState.isProcessing = false;
