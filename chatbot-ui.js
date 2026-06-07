@@ -1112,21 +1112,30 @@ function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
 
   setTimeout(() => {
     // Update meal card DOM
-    const nameEl = document.getElementById(`meal-name-${mealSlot}`);
     const descEl = document.getElementById(`meal-desc-${mealSlot}`);
     const calEl  = document.getElementById(`cal-${mealSlot}`);
     const clustEl= document.getElementById(`cluster-${mealSlot}`);
 
-    const servingCals = Math.round((newItem.per100g.calories * newItem.servingSizeG) / 100);
+    // Replace only the old item name in the description; keep the rest of the meal unchanged
+    if (descEl && oldItemName) {
+      const currentDesc = descEl.textContent;
+      if (currentDesc.includes(oldItemName)) {
+        descEl.textContent = currentDesc.replace(oldItemName, newItem.name);
+      } else {
+        descEl.textContent = currentDesc + ` | הוחלף: ${oldItemName} → ${newItem.name}`;
+      }
+    }
 
-    if (nameEl) nameEl.textContent = newItem.name;
-    if (descEl) descEl.textContent =
-      `${newItem.name} — ${newItem.servingSizeG}g | ` +
-      `חלבון: ${Math.round(newItem.per100g.protein * newItem.servingSizeG / 100)}g | ` +
-      `שומן: ${Math.round(newItem.per100g.fat * newItem.servingSizeG / 100)}g | ` +
-      `פחמ׳: ${Math.round(newItem.per100g.carbs * newItem.servingSizeG / 100)}g`;
-
-    if (calEl) calEl.textContent = servingCals;
+    // Adjust calories by the difference between old and new item
+    if (calEl) {
+      const oldItem = FOOD_DATABASE.find(f => f.id === UIState.swapSourceIds[mealSlot]);
+      const oldCals = oldItem
+        ? Math.round((oldItem.per100g.calories * oldItem.servingSizeG) / 100)
+        : 0;
+      const newCals = Math.round((newItem.per100g.calories * newItem.servingSizeG) / 100);
+      const currentTotal = parseInt(calEl.textContent, 10) || 0;
+      calEl.textContent = Math.max(0, currentTotal - oldCals + newCals);
+    }
 
     if (clustEl) {
       clustEl.textContent = '';
