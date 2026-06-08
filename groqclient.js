@@ -180,23 +180,7 @@ function buildUserPrompt(profile, retryCount = 0, retryViolations = []) {
 
 החזר JSON בדיוק בסכמה הבאה (ללא שדות נוספים):
 
-{
-  "calorie_calculation": "BMR ${profile.bmrBase} קק\\"ל × מכפיל פעילות + התאמת BMI = ${profile.caloricTarget} קק\\"ל",
-  "total_calories": ${profile.caloricTarget},
-  "meal_plan": {
-    "breakfast":       { "name": "שם ספציפי של הארוחה", "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.breakfast} },
-    "morning_snack":   { "name": "שם ספציפי של החטיף",  "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.morning_snack} },
-    "lunch":           { "name": "שם ספציפי של הארוחה", "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.lunch} },
-    "afternoon_snack": { "name": "שם ספציפי של החטיף",  "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.afternoon_snack} },
-    "dinner":          { "name": "שם ספציפי של הארוחה", "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.dinner} },
-    "evening_snack":   { "name": "שם ספציפי של החטיף",  "description": "רשימת פריטים עם גרמים וקלוריות לכל פריט", "calories": ${t.evening_snack} }
-  },
-  "summary": "מסר אישי קצר ומעודד בעברית",
-  "conversation_summary": "סיכום טכני: BMR, פעילות, BMI, יעד קלורי"
-}
-
-דוגמה לתיאור תקין: "חזה עוף 130g (215 קק\\"ל) + אורז מלא מבושל 150g (324 קק\\"ל) + סלט ירקות: מלפפון 80g + עגבנייה 100g (30 קק\\"ל)"
-דוגמה לתיאור שגוי: "עוף עם פחמימה וירקות" — שמות גנריים אסורים.`;
+{"total_calories":${profile.caloricTarget},"meal_plan":{"breakfast":{"name":"...","description":"פריט-ספציפי Xg + פריט-ספציפי Yg","calories":${t.breakfast}},"morning_snack":{"name":"...","description":"פריט-ספציפי Xg","calories":${t.morning_snack}},"lunch":{"name":"...","description":"פריט-ספציפי Xg + פריט-ספציפי Yg","calories":${t.lunch}},"afternoon_snack":{"name":"...","description":"פריט-ספציפי Xg","calories":${t.afternoon_snack}},"dinner":{"name":"...","description":"פריט-ספציפי Xg + פריט-ספציפי Yg","calories":${t.dinner}},"evening_snack":{"name":"...","description":"פריט-ספציפי Xg","calories":${t.evening_snack}}},"summary":"מסר אישי קצר ומעודד"}`;
 }
 
 /* ============================================================
@@ -254,7 +238,7 @@ async function sendGroqRequest(systemPrompt, conversationHistory, selectedModel,
     model,
     messages,
     temperature: GROQ_CONFIG.temperature,
-    ...(isJsonOutput ? { response_format: { type: 'json_object' } } : {}),
+    ...(isJsonOutput ? { response_format: { type: 'json_object' }, max_tokens: 700 } : {}),
   };
 
   const L = window.NutriLogger;
@@ -381,7 +365,7 @@ function postProcessMealPlan(planJson) {
 ============================================================ */
 
 function validateMealPlanStructure(json) {
-  const required      = ['calorie_calculation', 'total_calories', 'meal_plan', 'summary', 'conversation_summary'];
+  const required      = ['total_calories', 'meal_plan', 'summary'];
   const requiredMeals = ['breakfast', 'morning_snack', 'lunch', 'afternoon_snack', 'dinner', 'evening_snack'];
   const mealFields    = ['name', 'description', 'calories'];
   const missingFields = [];
@@ -421,12 +405,15 @@ async function generateMealPlan(profile, selectedModel, onProgress = () => {}) {
     const userPrompt   = buildUserPrompt(profile, retryCount, lastViolations);
     const messages     = [{ role: 'user', content: userPrompt }];
 
-    const modelLabel = selectedModel || GROQ_CONFIG.defaultModel;
-    onProgress('calling', `🤖 שולח בקשה ל-Groq (${modelLabel})…`);
+    // 8B for first attempt (500K TPD), 70B on retry (better JSON accuracy)
+    const effectiveModel = selectedModel
+      ? selectedModel
+      : (retryCount === 0 ? 'llama-3.1-8b-instant' : GROQ_CONFIG.defaultModel);
+    onProgress('calling', `🤖 שולח בקשה ל-Groq (${effectiveModel})…`);
 
     let planJson;
     try {
-      planJson = await sendGroqRequest(systemPrompt, messages, selectedModel, true);
+      planJson = await sendGroqRequest(systemPrompt, messages, effectiveModel, true);
     } catch (err) {
       if (err.message === 'API_KEY_MISSING') {
         return { success: false, error: 'API_KEY_MISSING', message: 'מפתח Groq API חסר. אנא הגדר מפתח תקין.' };
