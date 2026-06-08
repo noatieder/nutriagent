@@ -129,8 +129,10 @@ const APIKeyManager = Object.freeze({
 
   isSetForProvider(provider) {
     const key = this.getForProvider(provider);
-    const placeholder = provider === 'openai' ? HARDCODED_OPENAI_KEY : HARDCODED_GROQ_KEY;
-    return Boolean(key) && key !== placeholder && key.length > 20;
+    if (!key || key.length <= 20) return false;
+    // If key is still the build-time placeholder (not yet injected), treat as unset
+    if (/^__[A-Z_]+__$/.test(key)) return false;
+    return true;
   },
 });
 
