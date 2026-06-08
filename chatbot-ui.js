@@ -1066,6 +1066,8 @@ function showSwapCandidates(mealSlot, sourceId, oldIngredientText) {
     <div style="display:flex;flex-direction:column;gap:10px;">
   `;
 
+  const escapedOldText = (oldIngredientText || displayName).replace(/&/g,'&amp;').replaceAll('"','&quot;');
+
   candidates.forEach(({ item, score }) => {
     const scorePercent = Math.round(score * 100);
     const servingCals  = Math.round((item.per100g.calories * item.servingSizeG) / 100);
@@ -1076,6 +1078,7 @@ function showSwapCandidates(mealSlot, sourceId, oldIngredientText) {
         data-meal-slot="${mealSlot}"
         data-item-name="${item.name}"
         data-source-name="${displayName}"
+        data-old-text="${escapedOldText}"
         style="
           background:rgba(255,255,255,0.03);
           border:1px solid rgba(255,255,255,0.08);
@@ -1121,7 +1124,7 @@ function showSwapCandidates(mealSlot, sourceId, oldIngredientText) {
   setTimeout(() => {
     DOM.modalBody.querySelectorAll('.swap-candidate-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        applySwap(btn.dataset.mealSlot, btn.dataset.itemId, btn.dataset.itemName, btn.dataset.sourceName);
+        applySwap(btn.dataset.mealSlot, btn.dataset.itemId, btn.dataset.itemName, btn.dataset.sourceName, btn.dataset.oldText);
         closeModal();
       });
     });
@@ -1203,7 +1206,7 @@ function handleSwapClick(mealSlot) {
  * @param {string} newItemName
  * @param {string} oldItemName
  */
-function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
+function applySwap(mealSlot, newItemId, newItemName, oldItemName, oldTextInDesc) {
   const { fsm, FOOD_DATABASE } = window.NutriAgent;
   const newItem = FOOD_DATABASE.find(f => f.id === newItemId);
   if (!newItem) return;
@@ -1218,11 +1221,16 @@ function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
     const calEl  = document.getElementById(`cal-${mealSlot}`);
     const clustEl= document.getElementById(`cluster-${mealSlot}`);
 
-    // Replace only the old item name in the description; swap history in sidebar handles the log
-    if (descEl && oldItemName) {
+    // Replace the ingredient in the description.
+    // Prefer oldTextInDesc (exact text from description) over oldItemName (DB name),
+    // since the LLM may write "3 ביצים 90g" while the DB item is named "ביצה שלמה".
+    if (descEl) {
       const currentDesc = descEl.textContent;
-      if (currentDesc.includes(oldItemName)) {
-        descEl.textContent = currentDesc.replace(oldItemName, newItem.name);
+      const needle = (oldTextInDesc && currentDesc.includes(oldTextInDesc))
+        ? oldTextInDesc
+        : oldItemName;
+      if (needle && currentDesc.includes(needle)) {
+        descEl.textContent = currentDesc.replace(needle, newItem.name);
       }
     }
 
