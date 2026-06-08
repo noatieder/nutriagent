@@ -154,6 +154,13 @@ function buildSystemPrompt(profile) {
                       : profile.activityLevel === 'moderate'  ? 'בינונית'
                       : 'נמוכה';
 
+  // Derive active allergen flags (used to adapt building rules)
+  const noDairy = profile.allergies?.some(a => ['חלב','dairy','לקטוז','lactose'].includes(a.toLowerCase()))
+               || profile.restrictions?.some(r => r.includes('לקטוז') || r.includes('טבעוני') || r.toLowerCase().includes('vegan') || r.toLowerCase().includes('lactose'));
+  const noEggs  = profile.allergies?.some(a => ['ביצים','eggs'].includes(a.toLowerCase()))
+               || profile.restrictions?.some(r => r.includes('טבעוני') || r.toLowerCase().includes('vegan'));
+  const noFish  = profile.restrictions?.some(r => r.includes('טבעוני') || r.includes('צמחוני') || r.toLowerCase().includes('vegan') || r.toLowerCase().includes('vegetarian'));
+
   // Build restriction rules block
   const rules = [];
   if (profile.restrictions?.some(r => r.includes('גלוטן') || r.toLowerCase().includes('gluten')))
@@ -165,9 +172,28 @@ function buildSystemPrompt(profile) {
   if (profile.restrictions?.some(r => r.includes('צמחוני') || r.toLowerCase().includes('vegetarian')))
     rules.push('⛔ צמחוני: אסור — בשר, עוף, הודו, דגים, שרימפס. מותר — ביצים, מוצרי חלב');
   if (profile.allergies?.length > 0)
-    rules.push(`⛔ אלרגיות (קריטי): ${allergiesStr} — אסורים בכל ארוחה ובכל צורה`);
+    rules.push(`⛔ אלרגיות (קריטי — אסור בכל ארוחה): ${allergiesStr}`);
   if (profile.dislikes?.length > 0)
     rules.push(`⚠️ דחיות: ${dislikesStr} — אל תכלול בשום ארוחה`);
+
+  // Breakfast rule adapted to active allergens/restrictions
+  const breakfastOptions = [
+    ...(!noEggs  ? ['ביצים'] : []),
+    ...(!noDairy ? ['גבינה לבנה','יוגורט'] : []),
+    'טחינה','אבוקדו','שיבולת שועל',
+  ].join('/');
+  const breakfastForbidden = [
+    'עוף','בשר','אורז',
+    ...(noDairy ? ['גבינה','יוגורט','חלב'] : []),
+    ...(noEggs  ? ['ביצים'] : []),
+  ].join(', ');
+
+  // Dinner rule adapted to restrictions
+  const dinnerOptions = [
+    ...(!noFish ? ['דג'] : []),
+    ...(!noEggs ? ['ביצים','שקשוקה'] : []),
+    'טופו','קטניות',
+  ].join('/');
 
   return `אתה NutriAgent — מערכת תזונה מקצועית. צור תוכנית ארוחות יומית ב-JSON בלבד עבור ${genderPronoun}.
 
@@ -179,12 +205,12 @@ BMI: ${profile.bmi} (${profile.bmiCategory}) | פעילות: ${activityLabel} | 
 ${rules.length > 0 ? rules.join('\n') : '✅ אין הגבלות מיוחדות'}
 
 ## כללי בנייה חובה
-1. **שמות ספציפיים בלבד** — אסור: "פרי/ירק/דג/חלבון". חובה: "בננה/גזר/סלמון/גבינה לבנה 5%"
-2. **גיוון חלבונים** — אותו חלבון עיקרי (עוף/טונה/סלמון/ביצים/עדשים) — מקסימום ארוחה אחת ביום
-3. **בוקר ישראלי** — ביצים/גבינה/יוגורט/שיבולת שועל + לחם + פרי. ❌ לא עוף, בשר, אורז
-4. **חטיפים** — פרי/אגוזים/יוגורט/ירק בלבד. ❌ לא ארוחות מבושלות
-5. **ערב** — קל מהצהריים: דג/ביצים/שקשוקה/טופו + ירקות. ❌ לא עוף+אורז
-6. **כמויות** — ציין גרמים מדויקים לכל פריט בתיאור (לדוגמה: "חזה עוף 130g")
+1. **שמות ספציפיים בלבד** — אסור: "פרי/ירק/דג/חלבון". חובה: "בננה 100g / גזר 60g / סלמון 150g"
+2. **גיוון חלבונים** — אותו חלבון עיקרי — מקסימום ארוחה אחת ביום
+3. **בוקר** — ${breakfastOptions} + לחם + פרי. ❌ אסור: ${breakfastForbidden}
+4. **חטיפים** — פרי/אגוזים/ירק בלבד${!noDairy ? '/יוגורט' : ''}. ❌ לא ארוחות מבושלות
+5. **ערב** — קל מהצהריים: ${dinnerOptions} + ירקות
+6. **כמויות** — גרמים מדויקים לכל פריט (לדוגמה: "חזה עוף 130g")
 
 ## שפה ופורמט
 - עברית תקנית בלבד
@@ -444,10 +470,14 @@ async function generateMealPlan(profile, selectedModel, onProgress = () => {}) {
     const userPrompt   = buildUserPrompt(profile, retryCount, lastViolations);
     const messages     = [{ role: 'user', content: userPrompt }];
 
-    // 8B for first attempt (500K TPD), 70B on retry (better JSON accuracy)
-    const effectiveModel  = selectedModel
-      ? selectedModel
-      : (retryCount === 0 ? 'llama-3.1-8b-instant' : GROQ_CONFIG.defaultModel);
+    // Use 70B when: (a) profile has constraints, (b) this is a retry, (c) selectedModel is 8B on retry
+    const hasConstraints = (profile.allergies?.length > 0)
+      || profile.restrictions?.some(r => r !== 'אין' && r.trim() !== '');
+    const use8B = !hasConstraints && retryCount === 0
+      && (!selectedModel || selectedModel === 'llama-3.1-8b-instant');
+    const effectiveModel  = use8B
+      ? 'llama-3.1-8b-instant'
+      : (selectedModel && selectedModel !== 'llama-3.1-8b-instant' ? selectedModel : GROQ_CONFIG.defaultModel);
     const providerLabel   = getProviderForModel(effectiveModel) === 'openai' ? 'OpenAI' : 'Groq';
     onProgress('calling', `🤖 שולח בקשה ל-${providerLabel} (${effectiveModel})…`);
 
