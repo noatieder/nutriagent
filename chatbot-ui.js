@@ -1200,13 +1200,11 @@ function applySwap(mealSlot, newItemId, newItemName, oldItemName) {
     const calEl  = document.getElementById(`cal-${mealSlot}`);
     const clustEl= document.getElementById(`cluster-${mealSlot}`);
 
-    // Replace only the old item name in the description; keep the rest of the meal unchanged
+    // Replace only the old item name in the description; swap history in sidebar handles the log
     if (descEl && oldItemName) {
       const currentDesc = descEl.textContent;
       if (currentDesc.includes(oldItemName)) {
         descEl.textContent = currentDesc.replace(oldItemName, newItem.name);
-      } else {
-        descEl.textContent = currentDesc + ` | הוחלף: ${oldItemName} → ${newItem.name}`;
       }
     }
 

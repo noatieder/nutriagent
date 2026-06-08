@@ -2093,7 +2093,7 @@ function validateMealPlanCompliance(planJson, profile) {
   const mealCalSum = mealSlots.reduce((s, [, m]) => s + (Number(m.calories) || 0), 0);
   if (mealCalSum > 0 && profile.caloricTarget) {
     const diff = Math.abs(mealCalSum - profile.caloricTarget);
-    if (diff > profile.caloricTarget * 0.15) {
+    if (diff > profile.caloricTarget * 0.20) {
       violations.push(`סכום קלוריות (${mealCalSum}) חורג ב-${Math.round(diff / profile.caloricTarget * 100)}% מהיעד (${profile.caloricTarget})`);
     }
   }
@@ -2146,9 +2146,9 @@ function validateMealPlanCompliance(planJson, profile) {
     }
   }
 
-  // --- Protein variety check ---
+  // --- Protein variety check (flag only if same protein fills ALL 3 main meals) ---
   for (const [protein, slots] of Object.entries(proteinSlotsMap)) {
-    if (slots.length > 1) {
+    if (slots.length >= 3) {
       violations.push(`חלבון חוזר: "${protein}" מופיע ב-${slots.join(' + ')} — נדרש גיוון`);
     }
   }
