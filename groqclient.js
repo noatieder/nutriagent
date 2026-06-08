@@ -339,20 +339,28 @@ function postProcessMealPlan(planJson) {
   for (const meal of Object.values(planJson.meal_plan)) {
     const searchText = `${meal.name || ''} ${meal.description || ''}`.toLowerCase();
 
-    let bestId    = null;
-    let bestScore = 0;
-
+    // Track best match per cluster so we can prefer lean protein (cluster 1) for swaps.
+    const bestByCluster = {};
     for (const item of db) {
-      // Score by how many words from the item's Hebrew name appear in the meal text
-      const words = item.name.toLowerCase().split(/[\s,+|]+/).filter(w => w.length > 1);
-      const hits  = words.filter(w => searchText.includes(w));
-      const score = words.length > 0 ? hits.length / words.length : 0;
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestId    = item.id;
+      const words    = item.name.toLowerCase().split(/[\s,+|]+/).filter(w => w.length > 1);
+      const hitCount = words.filter(w => searchText.includes(w)).length;
+      const ratio    = words.length > 0 ? hitCount / words.length : 0;
+      const score    = hitCount * ratio; // penalises partial matches, rewards multi-word exact hits
+      const c = item.cluster;
+      if (!bestByCluster[c] || score > bestByCluster[c].score) {
+        bestByCluster[c] = { id: item.id, score };
       }
     }
+
+    const allMatches  = Object.values(bestByCluster).filter(m => m.score > 0);
+    const overallBest = allMatches.reduce((a, b) => b.score > a.score ? b : a, { id: null, score: 0 });
+    const proteinBest = bestByCluster[1]; // cluster 1 = lean protein
+    // Prefer lean protein when it scores ≥60% of the overall best — keeps the swap engine useful.
+    const chosen = (proteinBest && overallBest.score > 0 && proteinBest.score >= overallBest.score * 0.6)
+      ? proteinBest : overallBest;
+
+    const bestId    = chosen.id;
+    const bestScore = chosen.score;
 
     if (bestId && bestScore >= 0.4) {
       const matched = db.find(f => f.id === bestId);

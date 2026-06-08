@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="he">
+<head><meta charset="UTF-8"><title>NutriAgent Tests</title></head>
+<body>
+<pre id="output"></pre>
+<script src="../chatbot.js"></script>
+<script src="../groqclient.js"></script>
+<script>
+'use strict';
+
+// ── Simple test runner ──────────────────────────────────────────
+let passed = 0, failed = 0;
+const results = [];
+
+function test(name, fn) {
+  try {
+    fn();
+    results.push(`✅ PASS: ${name}`);
+    passed++;
+  } catch (e) {
+    results.push(`❌ FAIL: ${name}\n      ${e.message}`);
+    failed++;
+  }
+}
+
+function expect(val) {
+  return {
+    toBe(expected) {
+      if (val !== expected) throw new Error(`expected ${JSON.stringify(expected)}, got ${JSON.stringify(val)}`);
+    },
+    toContain(s) {
+      if (!String(val).includes(s)) throw new Error(`expected to contain "${s}", got: ${String(val).slice(0,200)}`);
+    },
+    toBeTrue()  { if (!val)  throw new Error(`expected true, got ${val}`); },
+    toBeFalse() { if (val)   throw new Error(`expected false, got ${val}`); },
+    toEqual(expected) {
+      const a = JSON.stringify(val), b = JSON.stringify(expected);
+      if (a !== b) throw new Error(`expected ${b}, got ${a}`);
+    },
+    toHaveLength(n) {
+      if (val.length !== n) throw new Error(`expected length ${n}, got ${val.length}`);
+    },
+    toBeGreaterThan(n) {
+      if (val <= n) throw new Error(`expected > ${n}, got ${val}`);
+    },
+  };
+}
+
+// ── Helpers ─────────────────────────────────────────────────────
+const { validateMealPlanCompliance, FOOD_DATABASE } = window.NutriAgent;
+const { buildSystemPrompt, buildUserPrompt, postProcessMealPlan } = window.NutriAgentAPI;
+
+function makeProfile(overrides = {}) {
+  return {
+    age: 25, gender: 'female', weight: 65, height: 162,
+    bmi: 24.8, bmiCategory: 'משקל תקין', bmrBase: 1450,
+    caloricTarget: 1600, activityLevel: 'moderate',
+    allergies: [], dislikes: [], restrictions: [],
+    detectedGender: 'female', mode: 'private',
+    ...overrides,
+  };
+}
+
+function makePlan(overrides = {}) {
+  return {
+    calorie_calculation: 'test',
+    total_calories: 1600,
+    meal_plan: {
+      breakfast:       { name: 'ארוחת בוקר', description: 'ביצה שלמה 55g + לחם מחיטה מלאה 60g + עגבנייה 100g', calories: 400 },
+      morning_snack:   { name: 'חטיף',       description: 'תפוח עץ 150g',                                        calories: 160 },
+      lunch:           { name: 'ארוחת צהריים',description: 'חזה עוף 130g + אורז מלא מבושל 150g + ברוקולי 120g', calories: 480 },
+      afternoon_snack: { name: 'חטיף',       description: 'שקדים 30g',                                          calories: 160 },
+      dinner:          { name: 'ארוחת ערב',  description: 'פילה סלמון 150g + קישוא 150g + לימון',               calories: 320 },
+      evening_snack:   { name: 'חטיף לילה',  description: 'יוגורט יווני 0% 200g',                               calories: 80  },
+    },
+    summary: 'מסר', conversation_summary: 'סיכום',
+    ...overrides,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION A — validateMealPlanCompliance
+// ══════════════════════════════════════════════════════════════════
+
+test('A1: תוכנית נקייה עוברת וולידציה', () => {
+  const { valid, violations } = validateMealPlanCompliance(makePlan(), makeProfile());
+  expect(valid).toBeTrue();
+  expect(violations).toHaveLength(0);
+});
+
+test('A2: גלוטן ב-ללא גלוטן — מזוהה', () => {
+  const profile = makeProfile({ restrictions: ['ללא גלוטן'] });
+  const plan = makePlan();
+  plan.meal_plan.breakfast.description = 'ביצה + לחם פיתה 60g'; // GLUTEN
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('גלוטן'))).toBeTrue();
+});
+
+test('A3: לקטוז ב-ללא לקטוז — מזוהה', () => {
+  const profile = makeProfile({ restrictions: ['ללא לקטוז'] });
+  const plan = makePlan();
+  plan.meal_plan.dinner.description = 'פסטה עם גבינה קשקבל';
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('לקטוז'))).toBeTrue();
+});
+
+test('A4: טבעוני — עוף מזוהה כהפרה', () => {
+  const profile = makeProfile({ restrictions: ['טבעוני'] });
+  const plan = makePlan(); // lunch has עוף
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('טבעוני'))).toBeTrue();
+});
+
+test('A5: טבעוני — תוכנית טבעונית עוברת', () => {
+  const profile = makeProfile({ restrictions: ['טבעוני'] });
+  const plan = makePlan();
+  plan.meal_plan.breakfast.description  = 'דייסת שיבולת שועל 250g + בננה 120g';
+  plan.meal_plan.morning_snack.description = 'תפוח עץ 150g';
+  plan.meal_plan.lunch.description      = 'עדשים מבושלות 200g + אורז מלא 150g + תרד טרי 80g';
+  plan.meal_plan.afternoon_snack.description = 'שקדים 30g';
+  plan.meal_plan.dinner.description     = 'טופו קשה 150g + קישוא 150g + עגבנייה 100g';
+  plan.meal_plan.evening_snack.description = 'בננה 120g';
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeTrue();
+});
+
+test('A6: צמחוני — סלמון מזוהה כהפרה', () => {
+  const profile = makeProfile({ restrictions: ['צמחוני'] });
+  const plan = makePlan(); // dinner has סלמון
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('צמחוני'))).toBeTrue();
+});
+
+test('A7: אלרגיית דגים — סלמון מזוהה', () => {
+  const profile = makeProfile({ allergies: ['דגים'] });
+  const plan = makePlan(); // dinner has סלמון
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('אלרגיה'))).toBeTrue();
+});
+
+test('A8: אלרגיית ביצים — ביצה מזוהה', () => {
+  const profile = makeProfile({ allergies: ['ביצים'] });
+  const plan = makePlan(); // breakfast has ביצה
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('אלרגיה'))).toBeTrue();
+});
+
+test('A9: סכום קלוריות חורג ב-20% — מזוהה', () => {
+  const profile = makeProfile({ caloricTarget: 1600 });
+  const plan = makePlan();
+  // Force sum to 2000 (25% over)
+  plan.meal_plan.lunch.calories = 880;
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('קלורי'))).toBeTrue();
+});
+
+test('A10: סכום קלוריות חורג 10% — עובר (בתוך הסבלנות)', () => {
+  const profile = makeProfile({ caloricTarget: 1600 });
+  const plan = makePlan();
+  plan.meal_plan.lunch.calories = 550; // sum = 1670, ~4% over
+  const cals = Object.values(plan.meal_plan).reduce((s, m) => s + m.calories, 0);
+  const { valid } = validateMealPlanCompliance(plan, profile);
+  expect(Math.abs(cals - 1600) / 1600 < 0.15).toBeTrue(); // within 15%
+  expect(valid).toBeTrue();
+});
+
+test('A11: גיוון חלבונים — עוף בבוקר וגם בצהריים', () => {
+  const profile = makeProfile();
+  const plan = makePlan();
+  plan.meal_plan.breakfast.description = 'חזה עוף 80g + עגבנייה'; // עוף in breakfast too
+  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeFalse();
+  expect(violations.some(v => v.includes('חוזר'))).toBeTrue();
+});
+
+test('A12: גיוון חלבונים — עוף בצהריים וסלמון בערב — עובר', () => {
+  const profile = makeProfile();
+  const plan = makePlan(); // עוף בצהריים, סלמון בערב — different proteins
+  const { valid } = validateMealPlanCompliance(plan, profile);
+  expect(valid).toBeTrue();
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION B — postProcessMealPlan
+// ══════════════════════════════════════════════════════════════════
+
+test('B1: postProcessMealPlan קיים', () => {
+  expect(typeof postProcessMealPlan).toBe('function');
+});
+
+test('B2: מזהה חזה עוף בתיאור', () => {
+  const plan = makePlan();
+  postProcessMealPlan(plan);
+  const ids = plan.meal_plan.lunch.food_item_ids;
+  expect(Array.isArray(ids)).toBeTrue();
+  expect(ids.length).toBeGreaterThan(0);
+  // Should match chicken_breast since description contains "חזה עוף"
+  expect(ids[0]).toBe('chicken_breast');
+});
+
+test('B3: מזהה תפוח עץ בחטיף', () => {
+  const plan = makePlan();
+  postProcessMealPlan(plan);
+  const ids = plan.meal_plan.morning_snack.food_item_ids;
+  expect(Array.isArray(ids)).toBeTrue();
+  expect(ids[0]).toBe('apple');
+});
+
+test('B4: מזהה שקדים בחטיף אחה"צ', () => {
+  const plan = makePlan();
+  postProcessMealPlan(plan);
+  const ids = plan.meal_plan.afternoon_snack.food_item_ids;
+  expect(ids[0]).toBe('almonds');
+});
+
+test('B5: cluster_tags מוגדר אחרי עיבוד', () => {
+  const plan = makePlan();
+  postProcessMealPlan(plan);
+  for (const meal of Object.values(plan.meal_plan)) {
+    expect(Array.isArray(meal.cluster_tags)).toBeTrue();
+    expect(meal.cluster_tags.length).toBeGreaterThan(0);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION C — buildSystemPrompt
+// ══════════════════════════════════════════════════════════════════
+
+test('C1: buildSystemPrompt מכיל פרופיל המשתמש', () => {
+  const p = makeProfile();
+  const prompt = buildSystemPrompt(p);
+  expect(prompt).toContain('65');      // weight
+  expect(prompt).toContain('162');     // height
+  expect(prompt).toContain('1600');    // caloricTarget
+});
+
+test('C2: buildSystemPrompt — טבעוני מכיל כלל טבעוני', () => {
+  const p = makeProfile({ restrictions: ['טבעוני'] });
+  const prompt = buildSystemPrompt(p);
+  expect(prompt).toContain('טבעוני');
+  expect(prompt).toContain('ביצים');
+});
+
+test('C3: buildSystemPrompt — ללא גלוטן מכיל כלל גלוטן', () => {
+  const p = makeProfile({ restrictions: ['ללא גלוטן'] });
+  const prompt = buildSystemPrompt(p);
+  expect(prompt).toContain('גלוטן');
+  expect(prompt).toContain('לחם');
+});
+
+test('C4: buildSystemPrompt — אלרגיות מוזכרות', () => {
+  const p = makeProfile({ allergies: ['בוטנים', 'חלב'] });
+  const prompt = buildSystemPrompt(p);
+  expect(prompt).toContain('בוטנים');
+  expect(prompt).toContain('חלב');
+});
+
+test('C5: buildSystemPrompt מכיל JSON בלבד', () => {
+  const p = makeProfile();
+  const prompt = buildSystemPrompt(p);
+  expect(prompt).toContain('JSON');
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION D — buildUserPrompt
+// ══════════════════════════════════════════════════════════════════
+
+test('D1: buildUserPrompt מכיל את 6 ה-slots', () => {
+  const p = makeProfile();
+  const prompt = buildUserPrompt(p);
+  ['breakfast','morning_snack','lunch','afternoon_snack','dinner','evening_snack'].forEach(slot => {
+    expect(prompt).toContain(slot);
+  });
+});
+
+test('D2: buildUserPrompt מכיל יעד קלורי', () => {
+  const p = makeProfile();
+  const prompt = buildUserPrompt(p);
+  expect(prompt).toContain('1600');
+});
+
+test('D3: buildUserPrompt — retry מכיל הפרות קודמות', () => {
+  const p = makeProfile();
+  const prompt = buildUserPrompt(p, 1, ['גלוטן ב-breakfast', 'לקטוז ב-lunch']);
+  expect(prompt).toContain('גלוטן ב-breakfast');
+  expect(prompt).toContain('לקטוז ב-lunch');
+});
+
+test('D4: buildUserPrompt לא מכיל food_item_ids', () => {
+  const p = makeProfile();
+  const prompt = buildUserPrompt(p);
+  if (prompt.includes('food_item_ids')) throw new Error('food_item_ids עדיין בפרומפט — LLM יממציא IDs שגויים');
+});
+
+test('D5: buildUserPrompt לא מכיל cluster_tags', () => {
+  const p = makeProfile();
+  const prompt = buildUserPrompt(p);
+  if (prompt.includes('cluster_tags')) throw new Error('cluster_tags עדיין בפרומפט');
+});
+
+// ══════════════════════════════════════════════════════════════════
+// SECTION E — FOOD_DATABASE integrity
+// ══════════════════════════════════════════════════════════════════
+
+test('E1: FOOD_DATABASE לא ריקה', () => {
+  expect(FOOD_DATABASE.length).toBeGreaterThan(50);
+});
+
+test('E2: כל פריט מזון מכיל שדות חובה', () => {
+  const required = ['id','name','cluster','per100g','servingSizeG'];
+  for (const item of FOOD_DATABASE) {
+    for (const field of required) {
+      if (!(field in item)) throw new Error(`${item.id} חסר שדה: ${field}`);
+    }
+  }
+});
+
+test('E3: אין IDs כפולים ב-FOOD_DATABASE', () => {
+  const ids = FOOD_DATABASE.map(f => f.id);
+  const unique = new Set(ids);
+  expect(unique.size).toBe(ids.length);
+});
+
+test('E4: כל פריט מזון שייך לאשכול 0-3', () => {
+  for (const item of FOOD_DATABASE) {
+    if (![0,1,2,3].includes(item.cluster))
+      throw new Error(`${item.id} אשכול לא תקין: ${item.cluster}`);
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// RESULTS
+// ══════════════════════════════════════════════════════════════════
+
+const summary = `\n${'═'.repeat(50)}\n📊 תוצאות: ${passed} עברו, ${failed} נכשלו מתוך ${passed+failed}\n${'═'.repeat(50)}`;
+const output = results.join('\n') + summary;
+
+document.getElementById('output').textContent = output;
+console.log(output);
+
+// Signal to headless Chrome via title
+document.title = failed === 0 ? `TESTS_PASSED:${passed}` : `TESTS_FAILED:${failed}`;
+</script>
+</body>
+</html>
