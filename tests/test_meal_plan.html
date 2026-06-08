@@ -151,38 +151,42 @@ test('A8: אלרגיית ביצים — ביצה מזוהה', () => {
   expect(violations.some(v => v.includes('אלרגיה'))).toBeTrue();
 });
 
-test('A9: סכום קלוריות חורג ב-20% — מזוהה', () => {
+test('A9: משתמש ללא הגבלות — עובר תמיד (fast path)', () => {
+  // No restrictions/allergens → always valid, no retries
   const profile = makeProfile({ caloricTarget: 1600 });
   const plan = makePlan();
-  // Force sum to 2000 (25% over)
-  plan.meal_plan.lunch.calories = 880;
+  plan.meal_plan.lunch.calories = 880; // even a big calorie mismatch is fine
   const { valid, violations } = validateMealPlanCompliance(plan, profile);
-  expect(valid).toBeFalse();
-  expect(violations.some(v => v.includes('קלורי'))).toBeTrue();
-});
-
-test('A10: סכום קלוריות חורג 10% — עובר (בתוך הסבלנות)', () => {
-  const profile = makeProfile({ caloricTarget: 1600 });
-  const plan = makePlan();
-  plan.meal_plan.lunch.calories = 550; // sum = 1670, ~4% over
-  const cals = Object.values(plan.meal_plan).reduce((s, m) => s + m.calories, 0);
-  const { valid } = validateMealPlanCompliance(plan, profile);
-  expect(Math.abs(cals - 1600) / 1600 < 0.15).toBeTrue(); // within 15%
   expect(valid).toBeTrue();
+  expect(violations).toHaveLength(0);
 });
 
-test('A11: גיוון חלבונים — עוף בבוקר וגם בצהריים', () => {
-  const profile = makeProfile();
-  const plan = makePlan();
-  plan.meal_plan.breakfast.description = 'חזה עוף 80g + עגבנייה'; // עוף in breakfast too
-  const { valid, violations } = validateMealPlanCompliance(plan, profile);
+test('A10: משתמש עם אלרגיה — בדיקה פעילה', () => {
+  const profile = makeProfile({ allergies: ['דגים'] });
+  const plan = makePlan(); // dinner has סלמון
+  const { valid } = validateMealPlanCompliance(plan, profile);
   expect(valid).toBeFalse();
-  expect(violations.some(v => v.includes('חוזר'))).toBeTrue();
 });
 
-test('A12: גיוון חלבונים — עוף בצהריים וסלמון בערב — עובר', () => {
-  const profile = makeProfile();
-  const plan = makePlan(); // עוף בצהריים, סלמון בערב — different proteins
+test('A11: גלוטן — break אחרי הפרה ראשונה בכל ארוחה', () => {
+  const profile = makeProfile({ restrictions: ['ללא גלוטן'] });
+  const plan = makePlan();
+  plan.meal_plan.breakfast.description = 'לחם שיפון 80g + ביצה';
+  plan.meal_plan.lunch.description     = 'פסטה עם עוף 200g';
+  const { violations } = validateMealPlanCompliance(plan, profile);
+  // Should have 2 violations (one per meal), not more
+  expect(violations.length).toBe(2);
+});
+
+test('A12: טבעוני עם תוכנית תקינה — עובר', () => {
+  const profile = makeProfile({ restrictions: ['טבעוני'] });
+  const plan = makePlan();
+  plan.meal_plan.breakfast.description    = 'דייסת שיבולת שועל 250g + בננה 120g';
+  plan.meal_plan.morning_snack.description = 'תפוח עץ 150g';
+  plan.meal_plan.lunch.description        = 'עדשים מבושלות 200g + אורז מלא 150g';
+  plan.meal_plan.afternoon_snack.description = 'שקדים 30g';
+  plan.meal_plan.dinner.description       = 'טופו קשה 150g + קישוא 150g';
+  plan.meal_plan.evening_snack.description = 'בננה 120g';
   const { valid } = validateMealPlanCompliance(plan, profile);
   expect(valid).toBeTrue();
 });

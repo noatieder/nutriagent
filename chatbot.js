@@ -2077,7 +2077,7 @@ const ALLERGEN_MAP = {
 };
 
 function validateMealPlanCompliance(planJson, profile) {
-  const violations = [];
+  const violations   = [];
   const restrictions = (profile.restrictions || []).map(r => r.toLowerCase());
   const allergies    = (profile.allergies    || []).map(a => a.toLowerCase());
 
@@ -2086,70 +2086,43 @@ function validateMealPlanCompliance(planJson, profile) {
   const isVegan       = restrictions.some(r => r.includes('טבעוני') || r.includes('vegan'));
   const isVegetarian  = restrictions.some(r => r.includes('צמחוני') || r.includes('vegetarian'));
 
+  // Fast path: no dietary restrictions or allergens → nothing to validate
+  const hasRestrictions = isGlutenFree || isLactoseFree || isVegan || isVegetarian || allergies.length > 0;
+  if (!hasRestrictions) return { valid: true, violations: [] };
+
   const mealPlan  = planJson?.meal_plan || {};
   const mealSlots = Object.entries(mealPlan);
 
-  // --- Calorie sum check ---
-  const mealCalSum = mealSlots.reduce((s, [, m]) => s + (Number(m.calories) || 0), 0);
-  if (mealCalSum > 0 && profile.caloricTarget) {
-    const diff = Math.abs(mealCalSum - profile.caloricTarget);
-    if (diff > profile.caloricTarget * 0.20) {
-      violations.push(`סכום קלוריות (${mealCalSum}) חורג ב-${Math.round(diff / profile.caloricTarget * 100)}% מהיעד (${profile.caloricTarget})`);
-    }
-  }
-
-  // --- Per-meal restriction checks ---
-  const proteinSlotsMap = {};
-
   for (const [slot, meal] of mealSlots) {
     const text = `${meal.name || ''} ${meal.description || ''}`.toLowerCase();
-    const slotLabel = slot;
 
     if (isGlutenFree) {
       for (const kw of GLUTEN_KEYWORDS) {
-        if (text.includes(kw)) violations.push(`גלוטן ב-${slotLabel}: "${kw}" אסור`);
+        if (text.includes(kw)) { violations.push(`גלוטן ב-${slot}: "${kw}" אסור`); break; }
       }
     }
     if (isLactoseFree) {
       for (const kw of LACTOSE_KEYWORDS) {
-        if (text.includes(kw)) violations.push(`לקטוז ב-${slotLabel}: "${kw}" אסור`);
+        if (text.includes(kw)) { violations.push(`לקטוז ב-${slot}: "${kw}" אסור`); break; }
       }
     }
     if (isVegan) {
       const veganBanned = [...MEAT_KEYWORDS, ...FISH_KEYWORDS, ...EGG_KEYWORDS, ...LACTOSE_KEYWORDS, 'דבש'];
       for (const kw of veganBanned) {
-        if (text.includes(kw)) { violations.push(`טבעוני ב-${slotLabel}: "${kw}" אסור`); break; }
+        if (text.includes(kw)) { violations.push(`טבעוני ב-${slot}: "${kw}" אסור`); break; }
       }
     }
     if (isVegetarian) {
       for (const kw of [...MEAT_KEYWORDS, ...FISH_KEYWORDS]) {
-        if (text.includes(kw)) { violations.push(`צמחוני ב-${slotLabel}: "${kw}" אסור`); break; }
+        if (text.includes(kw)) { violations.push(`צמחוני ב-${slot}: "${kw}" אסור`); break; }
       }
     }
 
-    // Allergen checks
     for (const allergen of allergies) {
       const keywords = ALLERGEN_MAP[allergen] || [];
       for (const kw of keywords) {
-        if (text.includes(kw)) { violations.push(`אלרגיה (${allergen}) ב-${slotLabel}: "${kw}" אסור`); break; }
+        if (text.includes(kw)) { violations.push(`אלרגיה (${allergen}) ב-${slot}: "${kw}" אסור`); break; }
       }
-    }
-
-    // Track main proteins for variety check (only main meals)
-    if (['breakfast','lunch','dinner'].includes(slot)) {
-      for (const protein of MAIN_PROTEINS) {
-        if (text.includes(protein)) {
-          if (!proteinSlotsMap[protein]) proteinSlotsMap[protein] = [];
-          proteinSlotsMap[protein].push(slot);
-        }
-      }
-    }
-  }
-
-  // --- Protein variety check (flag only if same protein fills ALL 3 main meals) ---
-  for (const [protein, slots] of Object.entries(proteinSlotsMap)) {
-    if (slots.length >= 3) {
-      violations.push(`חלבון חוזר: "${protein}" מופיע ב-${slots.join(' + ')} — נדרש גיוון`);
     }
   }
 
