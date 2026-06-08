@@ -7,4 +7,13 @@ if [ -z "$GROQ_API_KEY" ]; then
 fi
 
 sed -i "s/__GROQ_API_KEY__/${GROQ_API_KEY}/g" groqclient.js
-echo "Build complete — API key injected."
+echo "Groq API key injected."
+
+if [ -n "$OPENAI_API_KEY" ]; then
+  sed -i "s/__OPENAI_API_KEY__/${OPENAI_API_KEY}/g" groqclient.js
+  echo "OpenAI API key injected."
+else
+  echo "OPENAI_API_KEY not set — OpenAI models will require manual key entry."
+fi
+
+echo "Build complete."

@@ -82,10 +82,22 @@
           </button>
         </nav>
 
-        <!-- Model badge (fixed) -->
-        <div class="topbar__model-select" title="Groq Llama 3.3 70B">
+        <!-- Model selector -->
+        <div class="topbar__model-select">
           <span class="topbar__model-label" aria-hidden="true">⚡</span>
-          <span class="model-badge">Llama 3.3 70B</span>
+          <select id="model-selector" class="model-selector" aria-label="בחירת מודל AI">
+            <optgroup label="Groq (חינמי)">
+              <option value="llama-3.3-70b-versatile" selected>Llama 3.3 70B ⭐</option>
+              <option value="llama-3.1-8b-instant">Llama 3.1 8B ⚡</option>
+              <option value="llama-3.3-70b-specdec">Llama 3.3 70B SpDec</option>
+            </optgroup>
+            <optgroup label="OpenAI">
+              <option value="gpt-4o-mini">GPT-4o Mini</option>
+              <option value="gpt-4o">GPT-4o</option>
+              <option value="gpt-4.1">GPT-4.1</option>
+              <option value="gpt-5">GPT-5 🚀</option>
+            </optgroup>
+          </select>
         </div>
 
         <!-- Restart button -->
@@ -641,14 +653,14 @@
       aria-hidden="true"
     >
       <div class="api-key-card">
-        <div class="api-key-card__logo" aria-hidden="true">⚡</div>
+        <div class="api-key-card__logo" aria-hidden="true" id="api-key-logo">⚡</div>
         <h1 class="api-key-card__title" id="api-key-overlay-title">ברוכים הבאים ל-NutriAgent</h1>
-        <p class="api-key-card__desc">
-          כדי להפעיל את המערכת, יש להזין מפתח API תקין של <strong>Groq</strong>.<br/>
-          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו מלבד שרתי Groq.
+        <p class="api-key-card__desc" id="api-key-desc">
+          כדי להפעיל את המערכת, יש להזין מפתח API תקין של <strong id="api-key-provider-name">Groq</strong>.<br/>
+          המפתח נשמר מקומית בדפדפן בלבד ואינו מועבר לשרת כלשהו.
         </p>
         <div class="api-key-card__input-group">
-          <label for="api-key-input" class="api-key-card__label">מפתח Groq API</label>
+          <label for="api-key-input" class="api-key-card__label" id="api-key-label">מפתח Groq API</label>
           <input
             type="password"
             id="api-key-input"
@@ -667,7 +679,7 @@
         </button>
         <p class="api-key-card__note">
           🔒 המפתח מאוחסן ב-<code>sessionStorage</code> בלבד ונמחק עם סגירת הטאב.<br/>
-          לקבלת מפתח חינם: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--color-accent-primary)">console.groq.com/keys</a>
+          <span id="api-key-note-link">לקבלת מפתח חינם: <a href="https://console.groq.com/keys" target="_blank" rel="noopener" style="color:var(--color-accent-primary)">console.groq.com/keys</a></span>
         </p>
       </div>
     </div>

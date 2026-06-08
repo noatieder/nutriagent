@@ -43,6 +43,12 @@ function resolveDOM() {
   DOM.btnThemeToggle   = document.getElementById('btn-theme-toggle');
   DOM.btnRestart       = document.getElementById('btn-restart');
   DOM.topbarBrand      = document.querySelector('.topbar__brand');
+  DOM.modelSelector    = document.getElementById('model-selector');
+
+  // API key overlay dynamic elements
+  DOM.apiKeyProviderName = document.getElementById('api-key-provider-name');
+  DOM.apiKeyLabel        = document.getElementById('api-key-label');
+  DOM.apiKeyNoteLink     = document.getElementById('api-key-note-link');
 
   // Chat
   DOM.chatMessages     = document.getElementById('chat-messages');
@@ -108,13 +114,15 @@ function resolveDOM() {
    SECTION 2 — UI STATE
 ============================================================ */
 const UIState = {
-  isProcessing:   false,
-  currentMode:    'private',
-  chatHistory:    [],          // for follow-up context
-  currentPlanJson: null,
-  profileFieldsMap: {},        // fieldKey → <dd> element for live update
-  swapSourceIds:  {},          // mealSlot → food_item_id for swap engine
+  isProcessing:      false,
+  currentMode:       'private',
+  chatHistory:       [],          // for follow-up context
+  currentPlanJson:   null,
+  profileFieldsMap:  {},          // fieldKey → <dd> element for live update
+  swapSourceIds:     {},          // mealSlot → food_item_id for swap engine
   swapSourceCluster: {},
+  selectedModel:     null,        // null = use provider default (8B first strategy)
+  pendingKeyProvider: 'groq',     // which provider's key the overlay is collecting
 };
 
 // Timer handle for hideQuickChips — must be cancelled before rendering new chips
@@ -193,6 +201,9 @@ function bindEvents() {
   // Theme toggle
   DOM.btnThemeToggle.addEventListener('click', toggleTheme);
 
+  // Model selector
+  DOM.modelSelector?.addEventListener('change', handleModelChange);
+
   // Restart — button + logo click
   DOM.btnRestart.addEventListener('click', () => confirmRestart());
   DOM.topbarBrand.addEventListener('click', () => confirmRestart());
@@ -205,6 +216,21 @@ function bindEvents() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
   });
+}
+
+/* ============================================================
+   SECTION 4b — MODEL SELECTOR HANDLER
+============================================================ */
+function handleModelChange(e) {
+  const modelId = e.target.value;
+  UIState.selectedModel = modelId;
+
+  const { AI_MODELS, APIKeyManager } = window.NutriAgentAPI;
+  const model = AI_MODELS?.find(m => m.id === modelId);
+
+  if (model?.provider === 'openai' && !APIKeyManager.isSetForProvider('openai')) {
+    showAPIKeyOverlay('openai');
+  }
 }
 
 /* ============================================================
@@ -322,7 +348,7 @@ async function handleMealPlanGeneration() {
   };
 
   try {
-    const result = await generateMealPlan(profile, null, onProgress);
+    const result = await generateMealPlan(profile, UIState.selectedModel, onProgress);
 
     if (!result.success) {
       handleGenerationError(result);
@@ -391,7 +417,7 @@ function handleGenerationError(result) {
     NETWORK_ERROR:        '🌐 שגיאת רשת. בדוק את החיבור לאינטרנט ונסה שוב.',
     JSON_PARSE_ERROR:     '⚠️ שגיאת פורמט תגובה. נסה שוב.',
     MAX_RETRIES_EXCEEDED: '❌ לא הצלחנו ליצור תוכנית תקינה לאחר מספר ניסיונות. נסה שוב.',
-    QUOTA_EXCEEDED:       `⏳ חריגה ממגבלת קצב Groq API (429).\nאנא המתן ${result.retryAfterSeconds || 60} שניות ונסה שוב.`,
+    QUOTA_EXCEEDED:       `⏳ חריגה ממגבלת קצב API (429).\nאנא המתן ${result.retryAfterSeconds || 60} שניות ונסה שוב.`,
   };
 
   const msg = errorMessages[result.error] || result.message || 'שגיאה לא ידועה.';
@@ -429,7 +455,7 @@ async function handleFollowupQuery(text) {
     fsm.getProfile(),
     UIState.currentPlanJson,
     UIState.chatHistory,
-    null
+    UIState.selectedModel
   );
 
   hideTypingIndicator();
@@ -1389,7 +1415,25 @@ function closeModal() {
 /* ============================================================
    SECTION 21 — API KEY OVERLAY
 ============================================================ */
-function showAPIKeyOverlay() {
+function showAPIKeyOverlay(provider = 'groq') {
+  UIState.pendingKeyProvider = provider;
+
+  const { PROVIDERS } = window.NutriAgentAPI;
+  const cfg = PROVIDERS?.[provider] || { label: 'Groq', keyLabel: 'מפתח Groq API', keyPlaceholder: 'gsk_...', keyLink: 'https://console.groq.com/keys' };
+
+  // Update overlay text for the chosen provider
+  if (DOM.apiKeyProviderName) DOM.apiKeyProviderName.textContent = cfg.label;
+  if (DOM.apiKeyLabel)        DOM.apiKeyLabel.textContent = cfg.keyLabel;
+  if (DOM.apiKeyInput)        DOM.apiKeyInput.placeholder = cfg.keyPlaceholder;
+  if (DOM.apiKeyNoteLink) {
+    const isOpenAI = provider === 'openai';
+    DOM.apiKeyNoteLink.innerHTML = isOpenAI
+      ? `לקבלת מפתח: <a href="${cfg.keyLink}" target="_blank" rel="noopener" style="color:var(--color-accent-primary)">platform.openai.com/api-keys</a>`
+      : `לקבלת מפתח חינם: <a href="${cfg.keyLink}" target="_blank" rel="noopener" style="color:var(--color-accent-primary)">console.groq.com/keys</a>`;
+  }
+  if (DOM.apiKeyInput) DOM.apiKeyInput.value = '';
+  if (DOM.apiKeyError) DOM.apiKeyError.textContent = '';
+
   DOM.apiKeyOverlay.classList.add('visible');
   DOM.apiKeyOverlay.removeAttribute('aria-hidden');
   setTimeout(() => DOM.apiKeyInput.focus(), 100);
@@ -1401,7 +1445,8 @@ function hideAPIKeyOverlay() {
 }
 
 async function handleAPIKeyConfirm() {
-  const key = DOM.apiKeyInput.value.trim();
+  const key      = DOM.apiKeyInput.value.trim();
+  const provider = UIState.pendingKeyProvider || 'groq';
   DOM.apiKeyError.textContent = '';
 
   if (!key) {
@@ -1411,9 +1456,8 @@ async function handleAPIKeyConfirm() {
 
   const { APIKeyManager, validateAPIKey } = window.NutriAgentAPI;
 
-  // Groq keys start with gsk_ and are 56 chars; minimum check is length > 20
   if (!APIKeyManager.validate(key)) {
-    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. מפתח Groq API מתחיל ב-gsk_ ואורכו 56 תווים.';
+    DOM.apiKeyError.textContent = 'פורמט מפתח לא תקין. המפתח חייב להיות לפחות 20 תווים.';
     return;
   }
 
@@ -1423,14 +1467,15 @@ async function handleAPIKeyConfirm() {
   setAPIStatus('loading');
 
   try {
-    const result = await validateAPIKey(key);
+    const result = await validateAPIKey(key, provider);
 
     if (result.valid) {
-      APIKeyManager.save(key);
+      APIKeyManager.saveForProvider(provider, key);
       hideAPIKeyOverlay();
       setAPIStatus('online');
       showToast('🔑 מפתח API אומת בהצלחה!', 'success');
-      await startSession();
+      // Only start session for Groq (first-time setup); OpenAI key is saved and ready to use
+      if (provider === 'groq') await startSession();
     } else {
       DOM.apiKeyError.textContent = result.error || 'מפתח לא תקין.';
       setAPIStatus('offline');

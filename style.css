@@ -362,11 +362,18 @@
   border-color: rgba(26,39,68,0.08);
 }
 
-/* ── Model badge ─────────────────────────────────────────── */
-:root[data-theme="light"] .model-badge {
+/* ── Model badge & selector ─────────────────────────────── */
+:root[data-theme="light"] .model-badge,
+:root[data-theme="light"] .model-selector {
   background: rgba(26,39,68,0.05);
   border-color: rgba(26,39,68,0.15);
   color: var(--color-text-secondary);
+}
+
+:root[data-theme="light"] .model-selector option,
+:root[data-theme="light"] .model-selector optgroup {
+  background: #f4f6fb;
+  color: #1a2744;
 }
 
 /* ── Mode toggle buttons ────────────────────────────────── */
@@ -745,6 +752,36 @@ code, pre {
   font-weight: 500;
   padding: 4px 10px;
   white-space: nowrap;
+}
+
+.model-selector {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  padding: 4px 6px;
+  cursor: pointer;
+  max-width: 150px;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+}
+
+.model-selector:hover {
+  border-color: var(--color-accent-primary);
+  color: var(--color-text-primary);
+}
+
+.model-selector:focus {
+  outline: none;
+  border-color: var(--color-accent-primary);
+}
+
+.model-selector option,
+.model-selector optgroup {
+  background: var(--color-bg-elevated, #1a2740);
+  color: var(--color-text-primary);
 }
 
 /* ================================================================

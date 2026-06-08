@@ -31,33 +31,45 @@
    SECTION 1 — CONFIGURATION
 ============================================================ */
 
-const GROQ_MODELS = Object.freeze([
-  {
-    id:          'llama-3.3-70b-versatile',
-    label:       'Llama 3.3 70B ⭐',
-    description: 'מומלץ — הטוב ביותר ל-JSON ולהוראות מורכבות',
-    tpm:         12000,
-    rpd:         1000,
+const PROVIDERS = Object.freeze({
+  groq: {
+    baseUrl:      'https://api.groq.com/openai/v1/chat/completions',
+    storageKey:   'GROQ_API_KEY',
+    defaultModel: 'llama-3.3-70b-versatile',
+    label:        'Groq',
+    keyLink:      'https://console.groq.com/keys',
+    keyPlaceholder: 'gsk_...',
+    keyLabel:     'מפתח Groq API',
   },
-  {
-    id:          'llama-3.1-8b-instant',
-    label:       'Llama 3.1 8B ⚡',
-    description: 'הכי מהיר — 14,400 בקשות ביום',
-    tpm:         6000,
-    rpd:         14400,
+  openai: {
+    baseUrl:      'https://api.openai.com/v1/chat/completions',
+    storageKey:   'OPENAI_API_KEY',
+    defaultModel: 'gpt-4o-mini',
+    label:        'OpenAI',
+    keyLink:      'https://platform.openai.com/api-keys',
+    keyPlaceholder: 'sk-...',
+    keyLabel:     'מפתח OpenAI API',
   },
-  {
-    id:          'llama-3.3-70b-specdec',
-    label:       'Llama 3.3 70B SpDec',
-    description: 'Speculative Decoding — מהיר ביחס לגודלו',
-    tpm:         6000,
-    rpd:         1000,
-  },
+});
+
+const AI_MODELS = Object.freeze([
+  // Groq
+  { id: 'llama-3.3-70b-versatile', provider: 'groq',   label: 'Llama 3.3 70B ⭐',    description: 'מומלץ — הטוב ביותר ל-JSON ולהוראות מורכבות', tpm: 12000, rpd: 1000 },
+  { id: 'llama-3.1-8b-instant',    provider: 'groq',   label: 'Llama 3.1 8B ⚡',      description: 'הכי מהיר — 500K טוקן/יום', tpm: 6000, rpd: 14400 },
+  { id: 'llama-3.3-70b-specdec',   provider: 'groq',   label: 'Llama 3.3 70B SpDec', description: 'Speculative Decoding — מהיר ביחס לגודלו', tpm: 6000, rpd: 1000 },
+  // OpenAI
+  { id: 'gpt-4o-mini',             provider: 'openai', label: 'GPT-4o Mini',          description: 'מהיר וחסכוני' },
+  { id: 'gpt-4o',                  provider: 'openai', label: 'GPT-4o',               description: 'חכם ומדויק' },
+  { id: 'gpt-4.1',                 provider: 'openai', label: 'GPT-4.1',              description: 'הדגם המתקדם של OpenAI' },
+  { id: 'gpt-5',                   provider: 'openai', label: 'GPT-5 🚀',             description: 'הדגם החדש ביותר' },
 ]);
+
+// Backward-compat alias used internally for Groq-only logic
+const GROQ_MODELS = AI_MODELS.filter(m => m.provider === 'groq');
 
 const GROQ_CONFIG = Object.freeze({
   defaultModel: 'llama-3.3-70b-versatile',
-  baseUrl:      'https://api.groq.com/openai/v1/chat/completions',
+  baseUrl:      PROVIDERS.groq.baseUrl,
   temperature:  0.4,
   maxRetries:   3,
   retryDelayMs: 800,
@@ -70,32 +82,56 @@ const GROQ_CONFIG = Object.freeze({
    Groq keys start with "gsk_" and are 56 characters.
 ============================================================ */
 
-const HARDCODED_API_KEY = '__GROQ_API_KEY__';
+const HARDCODED_GROQ_KEY   = '__GROQ_API_KEY__';
+const HARDCODED_OPENAI_KEY = '__OPENAI_API_KEY__';
+
+function getProviderForModel(modelId) {
+  return AI_MODELS.find(m => m.id === modelId)?.provider || 'groq';
+}
 
 const APIKeyManager = Object.freeze({
 
-  get() {
-    try { return sessionStorage.getItem(GROQ_CONFIG.storageKey) || HARDCODED_API_KEY; }
-    catch { return HARDCODED_API_KEY; }
+  getForProvider(provider) {
+    const cfg = PROVIDERS[provider];
+    if (!cfg) return null;
+    const hardcoded = provider === 'openai' ? HARDCODED_OPENAI_KEY : HARDCODED_GROQ_KEY;
+    try { return sessionStorage.getItem(cfg.storageKey) || hardcoded; }
+    catch { return hardcoded; }
   },
+
+  // Groq backward-compat
+  get() { return this.getForProvider('groq'); },
 
   validate(key) {
     if (!key || typeof key !== 'string') return false;
-    const t = key.trim();
-    return t.length > 20;
+    return key.trim().length > 20;
   },
 
-  save(key) {
+  saveForProvider(provider, key) {
     if (!this.validate(key)) return false;
-    try { sessionStorage.setItem(GROQ_CONFIG.storageKey, key.trim()); return true; }
+    const cfg = PROVIDERS[provider];
+    if (!cfg) return false;
+    try { sessionStorage.setItem(cfg.storageKey, key.trim()); return true; }
     catch { return false; }
   },
 
-  clear() {
-    try { sessionStorage.removeItem(GROQ_CONFIG.storageKey); } catch { /* silent */ }
+  save(key) { return this.saveForProvider('groq', key); },
+
+  clearForProvider(provider) {
+    const cfg = PROVIDERS[provider];
+    if (!cfg) return;
+    try { sessionStorage.removeItem(cfg.storageKey); } catch { /* silent */ }
   },
 
+  clear() { this.clearForProvider('groq'); },
+
   isSet() { return true; },
+
+  isSetForProvider(provider) {
+    const key = this.getForProvider(provider);
+    const placeholder = provider === 'openai' ? HARDCODED_OPENAI_KEY : HARDCODED_GROQ_KEY;
+    return Boolean(key) && key !== placeholder && key.length > 20;
+  },
 });
 
 /* ============================================================
@@ -220,10 +256,11 @@ ${mealSummary}
 ============================================================ */
 
 async function sendGroqRequest(systemPrompt, conversationHistory, selectedModel, isJsonOutput = true) {
-  const apiKey = APIKeyManager.get();
+  const model    = selectedModel || GROQ_CONFIG.defaultModel;
+  const provider = getProviderForModel(model);
+  const cfg      = PROVIDERS[provider];
+  const apiKey   = APIKeyManager.getForProvider(provider);
   if (!apiKey) throw new Error('API_KEY_MISSING');
-
-  const model = selectedModel || GROQ_CONFIG.defaultModel;
 
   // Build messages array (OpenAI format)
   const messages = [
@@ -242,11 +279,11 @@ async function sendGroqRequest(systemPrompt, conversationHistory, selectedModel,
   };
 
   const L = window.NutriLogger;
-  L?.info('API', `→ POST Groq ${model}`, { isJsonOutput, messages: messages.length });
+  L?.info('API', `→ POST ${cfg.label} ${model}`, { isJsonOutput, messages: messages.length });
 
   let response;
   try {
-    response = await fetch(GROQ_CONFIG.baseUrl, {
+    response = await fetch(cfg.baseUrl, {
       method:  'POST',
       headers: {
         'Content-Type':  'application/json',
@@ -406,17 +443,18 @@ async function generateMealPlan(profile, selectedModel, onProgress = () => {}) {
     const messages     = [{ role: 'user', content: userPrompt }];
 
     // 8B for first attempt (500K TPD), 70B on retry (better JSON accuracy)
-    const effectiveModel = selectedModel
+    const effectiveModel  = selectedModel
       ? selectedModel
       : (retryCount === 0 ? 'llama-3.1-8b-instant' : GROQ_CONFIG.defaultModel);
-    onProgress('calling', `🤖 שולח בקשה ל-Groq (${effectiveModel})…`);
+    const providerLabel   = getProviderForModel(effectiveModel) === 'openai' ? 'OpenAI' : 'Groq';
+    onProgress('calling', `🤖 שולח בקשה ל-${providerLabel} (${effectiveModel})…`);
 
     let planJson;
     try {
       planJson = await sendGroqRequest(systemPrompt, messages, effectiveModel, true);
     } catch (err) {
       if (err.message === 'API_KEY_MISSING') {
-        return { success: false, error: 'API_KEY_MISSING', message: 'מפתח Groq API חסר. אנא הגדר מפתח תקין.' };
+        return { success: false, error: 'API_KEY_MISSING', message: 'מפתח API חסר. אנא הגדר מפתח תקין.' };
       }
       if (err.message.startsWith('QUOTA_EXCEEDED')) {
         const seconds = parseInt(err.message.split(':')[1], 10) || 60;
@@ -518,7 +556,7 @@ async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [
 
   } catch (err) {
     if (err.message === 'API_KEY_MISSING') {
-      return { success: false, error: 'API_KEY_MISSING', reply: 'מפתח Groq API חסר.' };
+      return { success: false, error: 'API_KEY_MISSING', reply: 'מפתח API חסר.' };
     }
     if (err.message.startsWith('QUOTA_EXCEEDED')) {
       const seconds = parseInt(err.message.split(':')[1], 10) || 60;
@@ -536,28 +574,32 @@ async function sendFollowupMessage(userQuery, profile, planJson, chatHistory = [
    SECTION 11 — API KEY LIVE VALIDATION
 ============================================================ */
 
-async function validateAPIKey(key) {
+async function validateAPIKey(key, provider = 'groq') {
   if (!APIKeyManager.validate(key)) {
-    return { valid: false, error: 'פורמט מפתח לא תקין. מפתח Groq API מתחיל ב-gsk_ ואורכו 56 תווים.' };
+    const cfg = PROVIDERS[provider] || PROVIDERS.groq;
+    return { valid: false, error: `פורמט מפתח לא תקין. מפתח ${cfg.label} מתחיל ב-${cfg.keyPlaceholder.replace('...', '')} ואורכו לפחות 20 תווים.` };
   }
 
-  const previous = APIKeyManager.get();
-  APIKeyManager.save(key);
+  const previous = APIKeyManager.getForProvider(provider);
+  APIKeyManager.saveForProvider(provider, key);
+
+  const testModel = PROVIDERS[provider]?.defaultModel || GROQ_CONFIG.defaultModel;
 
   try {
     const reply = await sendGroqRequest(
       'You are a helpful assistant. Answer very briefly.',
       [{ role: 'user', content: 'Reply with exactly one word: שלום' }],
-      GROQ_CONFIG.defaultModel,
+      testModel,
       false
     );
     if (reply?.length > 0) return { valid: true };
     return { valid: false, error: 'המפתח לא החזיר תגובה תקינה.' };
   } catch (err) {
-    if (previous) { APIKeyManager.save(previous); } else { APIKeyManager.clear(); }
+    if (previous) { APIKeyManager.saveForProvider(provider, previous); }
+    else { APIKeyManager.clearForProvider(provider); }
     const msg = err.message || '';
-    if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Invalid API Key')) {
-      return { valid: false, error: 'מפתח Groq API לא תקין. בדוק שהמפתח מתחיל ב-gsk_.' };
+    if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Invalid API Key') || msg.includes('Incorrect API key')) {
+      return { valid: false, error: `מפתח ${PROVIDERS[provider]?.label || ''} API לא תקין.` };
     }
     if (msg.startsWith('QUOTA_EXCEEDED')) {
       return { valid: false, error: 'חריגה ממגבלת קצב (429). אנא המתן מספר שניות ונסה שוב.' };
@@ -611,7 +653,10 @@ window.NutriAgentAPI = Object.freeze({
   sumMealCalories,
   extractClusterIndex,
   validateMealPlanStructure,
-  GROQ_MODELS,
+  getProviderForModel,
+  AI_MODELS,
+  PROVIDERS,
+  GROQ_MODELS,  // backward-compat
   delay,
 });
 
