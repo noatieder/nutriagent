@@ -222,15 +222,7 @@ function bindEvents() {
    SECTION 4b — MODEL SELECTOR HANDLER
 ============================================================ */
 function handleModelChange(e) {
-  const modelId = e.target.value;
-  UIState.selectedModel = modelId;
-
-  const { AI_MODELS, APIKeyManager } = window.NutriAgentAPI;
-  const model = AI_MODELS?.find(m => m.id === modelId);
-
-  if (model?.provider === 'openai' && !APIKeyManager.isSetForProvider('openai')) {
-    showAPIKeyOverlay('openai');
-  }
+  UIState.selectedModel = e.target.value;
 }
 
 /* ============================================================

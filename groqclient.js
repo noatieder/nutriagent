@@ -262,7 +262,7 @@ async function sendGroqRequest(systemPrompt, conversationHistory, selectedModel,
   const provider = getProviderForModel(model);
   const cfg      = PROVIDERS[provider];
   const apiKey   = APIKeyManager.getForProvider(provider);
-  if (!apiKey) throw new Error('API_KEY_MISSING');
+  if (!apiKey || /^__[A-Z_]+__$/.test(apiKey)) throw new Error('API_KEY_MISSING');
 
   // Build messages array (OpenAI format)
   const messages = [
