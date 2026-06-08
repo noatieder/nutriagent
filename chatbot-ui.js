@@ -987,24 +987,47 @@ function populateMealCard(slot, meal) {
 ============================================================ */
 
 /**
- * Handles the swap button click for a meal slot.
- * Calls the Cosine Similarity engine and shows selection modal.
- * @param {string} mealSlot — e.g. 'breakfast'
+ * Matches a free-text ingredient string to the best food DB item ID.
+ * Same algorithm as postProcessMealPlan in groqclient.js.
  */
-async function handleSwapClick(mealSlot) {
-  const { fsm, KMEANS_CLUSTERS } = window.NutriAgent;
+function matchIngredientText(text) {
+  const { FOOD_DATABASE } = window.NutriAgent;
+  if (!FOOD_DATABASE || !text) return null;
+  const searchText = text.toLowerCase();
+  const bestByCluster = {};
+  for (const item of FOOD_DATABASE) {
+    const words    = item.name.toLowerCase().split(/[\s,+|]+/).filter(w => w.length > 1);
+    const hitCount = words.filter(w => searchText.includes(w)).length;
+    const ratio    = words.length > 0 ? hitCount / words.length : 0;
+    const score    = hitCount * ratio;
+    if (score <= 0) continue;
+    const c = item.cluster;
+    if (!bestByCluster[c] || score > bestByCluster[c].score) {
+      bestByCluster[c] = { id: item.id, score };
+    }
+  }
+  const allMatches  = Object.values(bestByCluster).filter(m => m.score > 0);
+  if (!allMatches.length) return null;
+  const overallBest = allMatches.reduce((a, b) => b.score > a.score ? b : a);
+  const proteinBest = bestByCluster[1];
+  const chosen = (proteinBest && proteinBest.score >= overallBest.score * 0.6) ? proteinBest : overallBest;
+  return chosen.score >= 0.4 ? chosen.id : null;
+}
+
+/**
+ * Shows the swap candidates modal for a specific source item.
+ * Sets UIState.swapSourceIds so applySwap computes calorie delta correctly.
+ */
+function showSwapCandidates(mealSlot, sourceId, oldIngredientText) {
+  const { fsm, KMEANS_CLUSTERS, FOOD_DATABASE } = window.NutriAgent;
   const { mealSlotToHebrew } = window.NutriAgentAPI;
 
-  const sourceId = UIState.swapSourceIds[mealSlot];
+  if (sourceId) UIState.swapSourceIds[mealSlot] = sourceId;
 
   let candidates = sourceId ? fsm.getSwapCandidates(sourceId, 3) : [];
-
-  // Fallback: use cluster-based selection when sourceId not in DB or no candidates
   if (candidates.length === 0) {
     const clusterIdx = UIState.swapSourceCluster[mealSlot] ?? null;
-    if (clusterIdx !== null) {
-      candidates = fsm.getClusterCandidates(clusterIdx, 3);
-    }
+    if (clusterIdx !== null) candidates = fsm.getClusterCandidates(clusterIdx, 3);
   }
 
   if (candidates.length === 0) {
@@ -1012,20 +1035,20 @@ async function handleSwapClick(mealSlot) {
     return;
   }
 
-  // Build modal content
-  const mealName = mealSlotToHebrew(mealSlot);
-  const sourceItem = window.NutriAgent.FOOD_DATABASE.find(f => f.id === sourceId);
+  const mealName   = mealSlotToHebrew(mealSlot);
+  const sourceItem = FOOD_DATABASE.find(f => f.id === sourceId);
+  const displayName = sourceItem?.name || oldIngredientText || sourceId;
 
   let modalBodyHTML = `
     <p style="color:var(--color-text-secondary);font-size:13px;margin-bottom:16px;">
-      החלפת <strong style="color:var(--color-text-primary)">${sourceItem?.name || sourceId}</strong>
+      החלפת <strong style="color:var(--color-text-primary)">${displayName}</strong>
       — ${mealName}<br/>
       <small style="color:var(--color-text-muted)">כל החלופות מאותו אשכול K-Means (${KMEANS_CLUSTERS[sourceItem?.cluster]?.nameShort || ''})</small>
     </p>
     <div style="display:flex;flex-direction:column;gap:10px;">
   `;
 
-  candidates.forEach(({ item, score }, i) => {
+  candidates.forEach(({ item, score }) => {
     const scorePercent = Math.round(score * 100);
     const servingCals  = Math.round((item.per100g.calories * item.servingSizeG) / 100);
     modalBodyHTML += `
@@ -1034,7 +1057,7 @@ async function handleSwapClick(mealSlot) {
         data-item-id="${item.id}"
         data-meal-slot="${mealSlot}"
         data-item-name="${item.name}"
-        data-source-name="${sourceItem?.name || ''}"
+        data-source-name="${displayName}"
         style="
           background:rgba(255,255,255,0.03);
           border:1px solid rgba(255,255,255,0.08);
@@ -1075,20 +1098,81 @@ async function handleSwapClick(mealSlot) {
 
   modalBodyHTML += '</div>';
 
-  openModal(`🔄 החלפת ארוחה — ${mealName}`, modalBodyHTML);
+  openModal(`🔄 החלפת רכיב — ${mealName}`, modalBodyHTML);
 
-  // Bind swap candidate buttons inside the modal
   setTimeout(() => {
-    const btns = DOM.modalBody.querySelectorAll('.swap-candidate-btn');
-    btns.forEach(btn => {
+    DOM.modalBody.querySelectorAll('.swap-candidate-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        applySwap(
-          btn.dataset.mealSlot,
-          btn.dataset.itemId,
-          btn.dataset.itemName,
-          btn.dataset.sourceName,
-        );
+        applySwap(btn.dataset.mealSlot, btn.dataset.itemId, btn.dataset.itemName, btn.dataset.sourceName);
         closeModal();
+      });
+    });
+  }, 50);
+}
+
+/**
+ * Handles the swap button click.
+ * If the meal has multiple parseable ingredients, shows a picker first.
+ * Otherwise goes straight to swap candidates.
+ * @param {string} mealSlot — e.g. 'breakfast'
+ */
+function handleSwapClick(mealSlot) {
+  const { mealSlotToHebrew } = window.NutriAgentAPI;
+  const mealName  = mealSlotToHebrew(mealSlot);
+
+  const descEl    = document.getElementById(`meal-desc-${mealSlot}`);
+  const descText  = descEl?.textContent?.trim() || '';
+  const ingredients = descText.split(/\s*\+\s*|\s*\|\s*|\n/).map(s => s.trim()).filter(Boolean);
+
+  // Single ingredient or no parseable structure — skip picker
+  if (ingredients.length <= 1) {
+    showSwapCandidates(mealSlot, UIState.swapSourceIds[mealSlot], ingredients[0] || descText);
+    return;
+  }
+
+  // Multiple ingredients — show picker step
+  let pickerHTML = `
+    <p style="color:var(--color-text-secondary);font-size:13px;margin-bottom:16px;">
+      בחרי את הרכיב שברצונך להחליף ב<strong style="color:var(--color-text-primary)">${mealName}</strong>:
+    </p>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+  `;
+
+  ingredients.forEach(ingredient => {
+    const escaped = ingredient.replace(/&/g, '&amp;').replaceAll('"', '&quot;');
+    pickerHTML += `
+      <button
+        class="ingredient-pick-btn"
+        data-ingredient="${escaped}"
+        style="
+          background:rgba(255,255,255,0.03);
+          border:1px solid rgba(255,255,255,0.08);
+          border-radius:12px;
+          padding:10px 16px;
+          text-align:right;
+          cursor:pointer;
+          transition:all 0.2s;
+          color:var(--color-text-primary);
+          font-family:var(--font-primary);
+          font-size:13px;
+          width:100%;
+        "
+        onmouseover="this.style.borderColor='rgba(74,222,128,0.3)';this.style.background='rgba(74,222,128,0.06)'"
+        onmouseout="this.style.borderColor='rgba(255,255,255,0.08)';this.style.background='rgba(255,255,255,0.03)'"
+      >${ingredient}</button>
+    `;
+  });
+
+  pickerHTML += '</div>';
+
+  openModal(`🔄 החלפת רכיב — ${mealName}`, pickerHTML);
+
+  setTimeout(() => {
+    DOM.modalBody.querySelectorAll('.ingredient-pick-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ingredientText = btn.dataset.ingredient;
+        const itemId = matchIngredientText(ingredientText);
+        showSwapCandidates(mealSlot, itemId, ingredientText);
       });
     });
   }, 50);

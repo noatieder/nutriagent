@@ -1765,7 +1765,9 @@ class NutriAgentFSM {
         'דחיות':       p.dislikes?.join(', ') || 'אין',
         'הגבלות':      restrictionsDisplay || 'אין',
       },
-      tagsUpdate: { type: 'restriction', items: this.profile.restrictions || [] },
+      tagsUpdate:    { type: 'restriction', items: this.profile.restrictions || [] },
+      bmiData:       p.bmi ? { bmi: p.bmi, bmiCategory: p.bmiCategory, bmrBase: p.bmrBase } : undefined,
+      metricsUpdate: p.caloricTarget ? { calorieTarget: p.caloricTarget, bmrBase: p.bmrBase } : undefined,
     });
   }
 
